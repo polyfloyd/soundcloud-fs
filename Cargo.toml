@@ -1,0 +1,12 @@
+[package]
+name = "soundcloud-fs"
+version = "0.1.0"
+authors = ["polyfloyd <floyd@polyfloyd.net>"]
+
+[dependencies]
+fuse = "0.3.1"
+clap = "2.32.0"
+log = "*"
+time = "*"
+env_logger = "*"
+libc = "*"
