@@ -5,11 +5,17 @@ mod user;
 use self::error::*;
 use reqwest;
 use reqwest::{header, Url};
+use std::fs;
+use std::io::{self, Write};
+use std::os::unix::fs::OpenOptionsExt;
+use std::path::Path;
+use std::str;
 
 pub use self::track::Track;
 pub use self::user::User;
 
 const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64; rv:63.0) Gecko/20100101 Firefox/63.0";
+const CLIENT_ID: &str = "Ine5MMVzbMYXUSWyEkyHNWzC7p8wKpzb";
 
 fn default_headers() -> header::HeaderMap {
     let mut headers = header::HeaderMap::new();
@@ -44,11 +50,9 @@ impl Client {
             .default_headers(default_headers())
             .build()?;
 
-        let client_id = "Ine5MMVzbMYXUSWyEkyHNWzC7p8wKpzb";
-
         trace!("performing password login with user: {}", username.as_ref());
         let login_req_body = PasswordLoginReqBody {
-            client_id,
+            client_id: CLIENT_ID,
             scope: "fast-connect non-expiring purchase signup upload",
             recaptcha_pubkey: "6LeAxT8UAAAAAOLTfaWhndPCjGOnB54U1GEACb7N",
             recaptcha_response: None,
@@ -62,7 +66,7 @@ impl Client {
         };
         let login_url = Url::parse_with_params(
             "https://api-v2.soundcloud.com/sign-in/password?app_version=1541509103&app_locale=en",
-            &[("client_id", client_id)],
+            &[("client_id", CLIENT_ID)],
         ).unwrap();
         trace!("password login URL: {}", login_url);
         let login_res_body: PasswordLoginResBody = client
@@ -71,8 +75,14 @@ impl Client {
             .send()?
             .error_for_status()?
             .json()?;
-        let token = login_res_body.session.access_token;
 
+        let token = login_res_body.session.access_token;
+        trace!("SoundCloud login got token: {}****", &token[0..4]);
+        Client::from_token(token)
+    }
+
+    pub fn from_token(token: impl Into<String>) -> Result<Client, Error> {
+        let token = token.into();
         let auth_client = reqwest::Client::builder()
             .default_headers({
                 let auth_header = format!("OAuth {}", token).parse()?;
@@ -80,13 +90,28 @@ impl Client {
                 headers.insert(header::AUTHORIZATION, auth_header);
                 headers
             }).build()?;
-
-        trace!("SoundCloud login got token: {}****", &token[0..4]);
         Ok(Client {
-            client,
-            client_id: client_id.to_string(),
-            token,
+            client: auth_client,
+            client_id: CLIENT_ID.to_string(),
+            token: token.into(),
         })
+    }
+
+    pub fn from_cache(filename: impl AsRef<Path>) -> Result<Client, Error> {
+        let raw_token = fs::read(filename).map_err(|err| Error::FromCache(Box::new(err)))?;
+        let token =
+            str::from_utf8(&raw_token[..]).map_err(|err| Error::FromCache(Box::new(err)))?;
+        Client::from_token(token)
+    }
+
+    pub fn cache_to(&self, filename: impl AsRef<Path>) -> io::Result<()> {
+        let mut f = fs::OpenOptions::new()
+            .mode(0o600)
+            .write(true)
+            .create(true)
+            .open(filename)?;
+        f.write_all(self.token.as_bytes())?;
+        Ok(())
     }
 }
 
