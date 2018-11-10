@@ -13,6 +13,16 @@ pub enum Error {
     ReqwestError(reqwest::Error),
     #[fail(display = "Reqwest invalid header value: {}", _0)]
     ReqwestInvalidHeader(reqwest::header::InvalidHeaderValue),
+    #[fail(display = "Reqwest URL parse error: {}", _0)]
+    ReqwestUrlError(reqwest::UrlError),
+
+    #[fail(display = "Malformed response for {} {}: {}", method, url, error)]
+    MalformedResponse{
+        method: reqwest::Method,
+        url: reqwest::Url,
+        body: String,
+        error: Box<error::Error + Send + Sync>,
+    },
 }
 
 impl From<reqwest::Error> for Error {
@@ -24,5 +34,11 @@ impl From<reqwest::Error> for Error {
 impl From<reqwest::header::InvalidHeaderValue> for Error {
     fn from(err: reqwest::header::InvalidHeaderValue) -> Error {
         Error::ReqwestInvalidHeader(err)
+    }
+}
+
+impl From<reqwest::UrlError> for Error {
+    fn from(err: reqwest::UrlError) -> Error {
+        Error::ReqwestUrlError(err)
     }
 }

@@ -39,7 +39,6 @@ fn main() {
             info!("{}", err);
             soundcloud::Client::login(username, password)
         });
-
     let sc_client = match sc_client_rs {
         Ok(v) => v,
         Err(err) => {
@@ -54,7 +53,12 @@ fn main() {
         );
     }
 
-    let fs = FS::new(Entry::User(soundcloud::User::new("polyfloyd")));
+    let myself = soundcloud::User::me(&sc_client).unwrap();
+
+//    let favorites: Result<Vec<_>, _> = myself.favorites(&sc_client);
+//    info!("{:?}", favorites.unwrap());
+
+    let fs = FS::new(Entry::User(myself));
     let path = Path::new("/home/polyfloyd/sc-test");
     fuse::mount(fs, &path, &[]).unwrap();
 }

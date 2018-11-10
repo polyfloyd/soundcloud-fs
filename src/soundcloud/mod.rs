@@ -2,15 +2,17 @@ mod error;
 mod track;
 mod user;
 
-use self::error::*;
 use reqwest;
 use reqwest::{header, Url};
+use serde::de::DeserializeOwned;
+use std::fmt;
 use std::fs;
 use std::io::{self, Write};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::str;
 
+pub use self::error::Error;
 pub use self::track::Track;
 pub use self::user::User;
 
@@ -34,6 +36,7 @@ fn default_headers() -> header::HeaderMap {
     headers
 }
 
+#[derive(Clone)]
 pub struct Client {
     client: reqwest::Client,
     client_id: String,
@@ -113,6 +116,48 @@ impl Client {
         f.write_all(self.token.as_bytes())?;
         Ok(())
     }
+
+    pub fn query<T: DeserializeOwned>(
+        &self,
+        method: reqwest::Method,
+        base_url: impl AsRef<str>,
+    ) -> Result<T, Error> {
+        let url = Url::parse_with_params(base_url.as_ref(), &[("client_id", &self.client_id)])?;
+        info!("querying {} {}", method, url);
+
+        let mut buf = Vec::new();
+        self.client
+            .request(method.clone(), url.clone())
+            .send()?
+            .error_for_status()?
+            .copy_to(&mut buf)?;
+
+        match serde_json::from_slice(&buf[..]) {
+            Ok(t) => Ok(t),
+            Err(err) => {
+                let body = String::from_utf8_lossy(&buf[..]);
+                warn!("bad body: {}", body);
+                warn!("bad body error: {}", err);
+                Err(Error::MalformedResponse {
+                    method,
+                    url,
+                    body: body.to_string(),
+                    error: Box::new(err),
+                })
+            }
+        }
+    }
+}
+
+impl fmt::Debug for Client {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "Client {{ id: {}, token: {}**** }}",
+            self.client_id,
+            &self.token[0..4]
+        )
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -142,3 +187,41 @@ struct PasswordLoginResBody {
 struct Session {
     access_token: String,
 }
+
+// Common API headers
+//
+// GET /me/play-history/tracks?client_id=Ine5MMVzbMYXUSWyEkyHNWzC7p8wKpzb&limit=25&offset=0&linked_partitioning=1&app_version=1541509103&app_locale=en HTTP/1.1
+// Host: api-v2.soundcloud.com
+// User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:63.0) Gecko/20100101 Firefox/63.0
+// Accept: application/json, text/javascript, */*; q=0.01
+// Accept-Language: en-US,en;q=0.5
+// Accept-Encoding: gzip, deflate, br
+// Referer: https://soundcloud.com/
+// Authorization: OAuth 2-283605-41912219-YwFGFMHKimIMpY7
+// Origin: https://soundcloud.com
+// DNT: 1
+// Connection: keep-alive
+// Cache-Control: max-age=0
+
+// Login procedure
+//
+//POST https://api-v2.soundcloud.com/sign-in/password?client_id=Ine5MMVzbMYXUSWyEkyHNWzC7p8wKpzb&app_version=1541509103&app_locale=en
+//{
+//  "client_id":"Ine5MMVzbMYXUSWyEkyHNWzC7p8wKpzb",
+//  "scope":"fast-connect non-expiring purchase signup upload",
+//  "recaptcha_pubkey":"6LeAxT8UAAAAAOLTfaWhndPCjGOnB54U1GEACb7N",
+//  "recaptcha_response":null,
+//  "credentials":{
+//    "identifier":"USERNAME",
+//    "password":"PASSWORD"
+//  },
+//  "signature":"8:3-1-28405-134-1638720-1024-0-0:4ab691:2",
+//  "device_id":"381629-667600-267798-887023",
+//  "user_agent":"Mozilla/5.0 (X11; Linux x86_64; rv:63.0) Gecko/20100101 Firefox/63.0"
+//}
+//
+//{
+// "session":{
+//   "access_token":"TOKEN"
+//  }
+//}

@@ -2,13 +2,13 @@ use soundcloud;
 use time;
 
 #[derive(Clone, Debug)]
-pub enum Entry {
-    User(soundcloud::User),
-    UserFeed(soundcloud::User),
+pub enum Entry<'a> {
+    User(soundcloud::User<'a>),
+    UserFavorites(soundcloud::User<'a>),
     Track(soundcloud::Track),
 }
 
-impl Entry {
+impl<'a> Entry<'a> {
     pub fn file_attributes(&self, ino: u64) -> fuse::FileAttr {
         let now = time::now().to_timespec();
         match self {
@@ -28,7 +28,7 @@ impl Entry {
                 rdev: 1,
                 flags: 0,
             },
-            Entry::UserFeed(_user) => fuse::FileAttr {
+            Entry::UserFavorites(_user) => fuse::FileAttr {
                 ino,
                 size: 0,
                 blocks: 1,
@@ -63,24 +63,36 @@ impl Entry {
         }
     }
 
-    pub fn children(&self) -> Box<Iterator<Item = (String, Entry)>> {
+    pub fn children(&self) -> Result<Vec<(String, Entry<'a>)>, soundcloud::Error> {
         match self {
-            Entry::User(user) => {
-                Box::new(vec![("feed".to_string(), Entry::UserFeed(user.clone()))].into_iter())
-            }
-            Entry::UserFeed(user) => {
-                let iter = user
-                    .feed_tracks()
-                    .map(|track| (track.id() + ".mp3", Entry::Track(track)));
-                Box::new(iter)
+            Entry::User(user) => Ok(vec![(
+                "favorites".to_string(),
+                Entry::UserFavorites(user.clone()),
+            )]),
+            Entry::UserFavorites(user) => {
+                let children = user
+                    .favorites()?
+                    .into_iter()
+                    .map(|track| {
+                        let title = track.title.replace(char::is_whitespace, "_");
+                        let name = format!("{}_{}.mp3", title, track.id);
+                        (name, Entry::Track(track))
+                    }).collect();
+                Ok(children)
             }
             Entry::Track(_) => unreachable!("tracks do not have child files"),
         }
     }
 
-    pub fn child_by_name(&self, child_name: impl AsRef<str>) -> Option<Entry> {
-        self.children()
+    pub fn child_by_name(
+        &self,
+        child_name: impl AsRef<str>,
+    ) -> Result<Option<Entry<'a>>, soundcloud::Error> {
+        let child = self
+            .children()?
+            .into_iter()
             .find(|(name, _)| name == child_name.as_ref())
-            .map(|(_, entry)| entry)
+            .map(|(_, entry)| entry);
+        Ok(child)
     }
 }

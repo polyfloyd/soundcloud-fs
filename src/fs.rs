@@ -6,16 +6,16 @@ use std::os;
 
 const INO_ROOT: u64 = 1;
 
-pub struct FS {
+pub struct FS<'a> {
     next_ino: u64,
-    nodes: HashMap<u64, Entry>,
+    nodes: HashMap<u64, Entry<'a>>,
     name_mapping: HashMap<(u64, String), u64>,
 
-    readdir_handles: HashMap<u64, Vec<(String, Entry, u64)>>,
+    readdir_handles: HashMap<u64, Vec<(String, Entry<'a>, u64)>>,
     next_readdir_handle: u64,
 }
 
-impl FS {
+impl<'a> FS<'a> {
     pub fn new(root: Entry) -> FS {
         let mut nodes = HashMap::new();
         nodes.insert(INO_ROOT, root);
@@ -42,7 +42,7 @@ impl FS {
     }
 }
 
-impl fuse::Filesystem for FS {
+impl<'a> fuse::Filesystem for FS<'a> {
     fn init(&mut self, _req: &fuse::Request) -> Result<(), os::raw::c_int> {
         trace!("fuse init");
         Ok(())
@@ -62,23 +62,31 @@ impl fuse::Filesystem for FS {
         let name = os_name.to_string_lossy();
         trace!("fuse lookup, {}, {}", parent_ino, name);
 
-        match self.nodes.get(&parent_ino).cloned() {
-            Some(parent) => {
-                if let Some(child) = parent.child_by_name(&name) {
-                    let child_ino = self.get_inode(parent_ino, &name);
-                    let attrs = child.file_attributes(child_ino);
-                    self.nodes.insert(child_ino, child);
-                    let now = time::now().to_timespec();
-                    reply.entry(&now, &attrs, 0);
-                } else {
-                    reply.error(libc::ENOENT);
-                }
-            }
+        let parent = match self.nodes.get(&parent_ino).cloned() {
+            Some(v) => v,
             None => {
                 error!("fuse: no node for inode {}", parent_ino);
                 reply.error(libc::ENOENT);
+                return;
             }
         };
+        let child = match parent.child_by_name(&name) {
+            Ok(v) => v,
+            Err(err) => {
+                error!("fuse: could not get child {}: {}", name, err);
+                reply.error(libc::EIO);
+                return;
+            }
+        };
+        if let Some(child) = child {
+            let child_ino = self.get_inode(parent_ino, &name);
+            let attrs = child.file_attributes(child_ino);
+            self.nodes.insert(child_ino, child);
+            let now = time::now().to_timespec();
+            reply.entry(&now, &attrs, 0);
+        } else {
+            reply.error(libc::ENOENT);
+        }
     }
 
     fn getattr(&mut self, _req: &fuse::Request, ino: u64, reply: fuse::ReplyAttr) {
@@ -122,20 +130,31 @@ impl fuse::Filesystem for FS {
     ) {
         trace!("fuse opendir: {}, {}", parent_ino, flags);
 
-        let entries = match self.nodes.get(&parent_ino).cloned() {
-            Some(entry) => entry
-                .children()
-                .into_iter()
-                .map(|(name, entry)| {
-                    let ino = self.get_inode(parent_ino, &name);
-                    (name, entry, ino)
-                }).collect(),
+        let entry = match self.nodes.get(&parent_ino).cloned() {
+            Some(entry) => entry,
             None => {
                 error!("fuse: no entry for inode {}", parent_ino);
                 reply.error(libc::ENOENT);
                 return;
             }
         };
+        let children = match entry.children() {
+            Ok(v) => v,
+            Err(err) => {
+                error!(
+                    "fuse: could not get children for inode {}: {}",
+                    parent_ino, err
+                );
+                reply.error(libc::EIO);
+                return;
+            }
+        };
+        let entries = children
+            .into_iter()
+            .map(|(name, entry)| {
+                let ino = self.get_inode(parent_ino, &name);
+                (name, entry, ino)
+            }).collect();
 
         let fh = self.next_readdir_handle;
         self.next_readdir_handle += 1;
