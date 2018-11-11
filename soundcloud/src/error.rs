@@ -19,8 +19,13 @@ pub enum Error {
     #[fail(display = "Reqwest URL parse error: {}", _0)]
     ReqwestUrlError(reqwest::UrlError),
 
-    #[fail(display = "Malformed response for {} {}: {}", method, url, error)]
-    MalformedResponse{
+    #[fail(
+        display = "Malformed response for {} {}: {}",
+        method,
+        url,
+        error
+    )]
+    MalformedResponse {
         method: reqwest::Method,
         url: reqwest::Url,
         body: String,

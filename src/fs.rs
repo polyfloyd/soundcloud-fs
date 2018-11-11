@@ -140,7 +140,13 @@ impl<'a> fuse::Filesystem for FS<'a> {
         size: u32,
         reply: fuse::ReplyData,
     ) {
-        trace!("fuse read: ino={}, fh={}, offset={}, size={}", ino, fh, offset, size);
+        trace!(
+            "fuse read: ino={}, fh={}, offset={}, size={}",
+            ino,
+            fh,
+            offset,
+            size
+        );
 
         let reader = match self.read_handles.get_mut(&fh) {
             Some(e) => e,
