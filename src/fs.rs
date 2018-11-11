@@ -62,20 +62,22 @@ impl<'a> fuse::Filesystem for FS<'a> {
         let name = os_name.to_string_lossy();
         trace!("fuse lookup, {}, {}", parent_ino, name);
 
-        let parent = match self.nodes.get(&parent_ino).cloned() {
-            Some(v) => v,
-            None => {
-                error!("fuse: no node for inode {}", parent_ino);
-                reply.error(libc::ENOENT);
-                return;
-            }
-        };
-        let child = match parent.child_by_name(&name) {
-            Ok(v) => v,
-            Err(err) => {
-                error!("fuse: could not get child {}: {}", name, err);
-                reply.error(libc::EIO);
-                return;
+        let child = {
+            let parent = match self.nodes.get(&parent_ino) {
+                Some(v) => v,
+                None => {
+                    error!("fuse: no node for inode {}", parent_ino);
+                    reply.error(libc::ENOENT);
+                    return;
+                }
+            };
+            match parent.child_by_name(&name) {
+                Ok(v) => v,
+                Err(err) => {
+                    error!("fuse: could not get child {}: {}", name, err);
+                    reply.error(libc::EIO);
+                    return;
+                }
             }
         };
         if let Some(child) = child {
@@ -130,23 +132,25 @@ impl<'a> fuse::Filesystem for FS<'a> {
     ) {
         trace!("fuse opendir: {}, {}", parent_ino, flags);
 
-        let entry = match self.nodes.get(&parent_ino).cloned() {
-            Some(entry) => entry,
-            None => {
-                error!("fuse: no entry for inode {}", parent_ino);
-                reply.error(libc::ENOENT);
-                return;
-            }
-        };
-        let children = match entry.children() {
-            Ok(v) => v,
-            Err(err) => {
-                error!(
-                    "fuse: could not get children for inode {}: {}",
-                    parent_ino, err
-                );
-                reply.error(libc::EIO);
-                return;
+        let children = {
+            let entry = match self.nodes.get(&parent_ino) {
+                Some(entry) => entry,
+                None => {
+                    error!("fuse: no entry for inode {}", parent_ino);
+                    reply.error(libc::ENOENT);
+                    return;
+                }
+            };
+            match entry.children() {
+                Ok(v) => v,
+                Err(err) => {
+                    error!(
+                        "fuse: could not get children for inode {}: {}",
+                        parent_ino, err
+                    );
+                    reply.error(libc::EIO);
+                    return;
+                }
             }
         };
         let entries = children
