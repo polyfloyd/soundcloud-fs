@@ -198,46 +198,42 @@ impl<'a> fuse::Filesystem for FS<'a> {
         reply.ok();
     }
 
-    fn statfs(&mut self, _req: &fuse::Request, _ino: u64, _reply: fuse::ReplyStatfs) {
-        unimplemented!();
-    }
-
     fn access(&mut self, _req: &fuse::Request, ino: u64, mask: u32, reply: fuse::ReplyEmpty) {
         trace!("fuse access: {}, {}", ino, mask);
         reply.ok();
     }
 
-    fn getlk(
-        &mut self,
-        _req: &fuse::Request,
-        _ino: u64,
-        _fh: u64,
-        _lock_owner: u64,
-        _start: u64,
-        _end: u64,
-        _typ: u32,
-        _pid: u32,
-        _reply: fuse::ReplyLock,
-    ) {
-        unimplemented!();
-    }
-
-    fn setlk(
-        &mut self,
-        _req: &fuse::Request,
-        _ino: u64,
-        _fh: u64,
-        _lock_owner: u64,
-        _start: u64,
-        _end: u64,
-        _typ: u32,
-        _pid: u32,
-        _sleep: bool,
-        _reply: fuse::ReplyEmpty,
-    ) {
-        unimplemented!();
-    }
-
+    //    fn getlk(
+    //        &mut self,
+    //        _req: &fuse::Request,
+    //        _ino: u64,
+    //        _fh: u64,
+    //        _lock_owner: u64,
+    //        _start: u64,
+    //        _end: u64,
+    //        _typ: u32,
+    //        _pid: u32,
+    //        _reply: fuse::ReplyLock,
+    //    ) {
+    //        unimplemented!();
+    //    }
+    //    fn setlk(
+    //        &mut self,
+    //        _req: &fuse::Request,
+    //        _ino: u64,
+    //        _fh: u64,
+    //        _lock_owner: u64,
+    //        _start: u64,
+    //        _end: u64,
+    //        _typ: u32,
+    //        _pid: u32,
+    //        _sleep: bool,
+    //        _reply: fuse::ReplyEmpty,
+    //    ) {
+    //        unimplemented!();
+    //    }
+    //    fn statfs(&mut self, _req: &fuse::Request, ino: u64, _reply: fuse::ReplyStatfs) {
+    //    }
     //    fn getxattr(
     //        &mut self,
     //        _req: &fuse::Request,
