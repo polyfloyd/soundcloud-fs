@@ -2,7 +2,18 @@ mod error;
 mod track;
 mod user;
 
-use reqwest;
+extern crate failure;
+#[macro_use]
+extern crate failure_derive;
+#[macro_use]
+extern crate log;
+extern crate reqwest;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
+extern crate serde_json;
+extern crate time;
+
 use reqwest::{header, Url};
 use serde::de::DeserializeOwned;
 use std::fmt;

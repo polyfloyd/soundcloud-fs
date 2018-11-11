@@ -1,22 +1,14 @@
-extern crate clap;
-extern crate fuse;
-extern crate time;
-#[macro_use]
-extern crate log;
 extern crate env_logger;
 extern crate failure;
-#[macro_use]
-extern crate failure_derive;
+extern crate fuse;
 extern crate libc;
-extern crate reqwest;
-extern crate serde;
 #[macro_use]
-extern crate serde_derive;
-extern crate serde_json;
+extern crate log;
+extern crate soundcloud;
+extern crate time;
 
 mod fs;
 mod mapping;
-mod soundcloud;
 
 use self::fs::*;
 use self::mapping::*;
@@ -55,8 +47,8 @@ fn main() {
 
     let myself = soundcloud::User::me(&sc_client).unwrap();
 
-//    let favorites: Result<Vec<_>, _> = myself.favorites(&sc_client);
-//    info!("{:?}", favorites.unwrap());
+    //    let favorites: Result<Vec<_>, _> = myself.favorites(&sc_client);
+    //    info!("{:?}", favorites.unwrap());
 
     let fs = FS::new(Entry::User(myself));
     let path = Path::new("/home/polyfloyd/sc-test");

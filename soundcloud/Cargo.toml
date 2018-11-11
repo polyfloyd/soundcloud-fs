@@ -1,0 +1,14 @@
+[package]
+name = "soundcloud"
+version = "0.1.0"
+authors = ["polyfloyd <floyd@polyfloyd.net>"]
+
+[dependencies]
+failure = "*"
+failure_derive = "*"
+log = "*"
+reqwest = "*"
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
+time = "*"
