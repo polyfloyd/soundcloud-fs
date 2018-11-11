@@ -107,7 +107,7 @@ impl Client {
         Ok(Client {
             client: auth_client,
             client_id: CLIENT_ID.to_string(),
-            token: token.into(),
+            token,
         })
     }
 
@@ -134,8 +134,8 @@ impl Client {
         base_url: impl AsRef<str>,
     ) -> Result<(reqwest::RequestBuilder, Url), Error> {
         let url = Url::parse_with_params(base_url.as_ref(), &[("client_id", &self.client_id)])?;
-        let req = self.client.request(method.clone(), url.clone());
         info!("querying {} {}", method, url);
+        let req = self.client.request(method, url.clone());
         Ok((req, url))
     }
 

@@ -75,7 +75,7 @@ impl<'a> Track<'a> {
                 .execute(clone_request(&req))?
                 .error_for_status()?;
             Ok(RangeSeeker {
-                req: req,
+                req,
                 res,
                 current_offset: 0,
                 client: &sc_client.client,
@@ -108,7 +108,7 @@ impl<'a> io::Read for RangeSeeker<'a> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let mut nread = 0;
         let mut n = 1;
-        while buf.len() > 0 && n > 0 {
+        while !buf.is_empty() && n > 0 {
             n = self.res.read(&mut buf[nread..])?;
             nread += n;
         }
