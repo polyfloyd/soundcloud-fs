@@ -1,15 +1,15 @@
 use fuse;
 use mapping::*;
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::ffi;
+use std::hash::{Hash, Hasher};
 use std::os;
 
 const INO_ROOT: u64 = 1;
 
 pub struct FS<'a> {
-    next_ino: u64,
     nodes: HashMap<u64, Entry<'a>>,
-    name_mapping: HashMap<(u64, String), u64>,
 
     readdir_handles: HashMap<u64, Vec<(String, Entry<'a>, u64)>>,
     next_readdir_handle: u64,
@@ -21,24 +21,9 @@ impl<'a> FS<'a> {
         nodes.insert(INO_ROOT, root);
         FS {
             nodes,
-            name_mapping: HashMap::new(),
-            next_ino: 256,
             next_readdir_handle: 1,
             readdir_handles: HashMap::new(),
         }
-    }
-
-    fn get_inode(&mut self, parent_ino: u64, name: &str) -> u64 {
-        let key = (parent_ino, name.to_string());
-        let mut next_ino = Some(self.next_ino);
-        let ino = self
-            .name_mapping
-            .entry(key)
-            .or_insert_with(|| next_ino.take().unwrap());
-        if next_ino.is_none() {
-            self.next_ino += 1;
-        }
-        *ino
     }
 }
 
@@ -81,7 +66,7 @@ impl<'a> fuse::Filesystem for FS<'a> {
             }
         };
         if let Some(child) = child {
-            let child_ino = self.get_inode(parent_ino, &name);
+            let child_ino = inode_for_child(parent_ino, &name);
             let attrs = child.file_attributes(child_ino);
             self.nodes.insert(child_ino, child);
             let now = time::now().to_timespec();
@@ -156,7 +141,7 @@ impl<'a> fuse::Filesystem for FS<'a> {
         let entries = children
             .into_iter()
             .map(|(name, entry)| {
-                let ino = self.get_inode(parent_ino, &name);
+                let ino = inode_for_child(parent_ino, &name);
                 (name, entry, ino)
             }).collect();
 
@@ -419,4 +404,11 @@ impl<'a> fuse::Filesystem for FS<'a> {
     //        _idx: u64,
     //        reply: ReplyBmap
     //    ) { }
+}
+
+fn inode_for_child(parent_ino: u64, name: &str) -> u64 {
+    let mut s = DefaultHasher::new();
+    parent_ino.hash(&mut s);
+    name.hash(&mut s);
+    s.finish()
 }
