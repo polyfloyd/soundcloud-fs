@@ -48,22 +48,25 @@ impl<'a> Entry<'a> {
                 rdev: 1,
                 flags: 0,
             },
-            Entry::Track(_track) => fuse::FileAttr {
-                ino,
-                size: 0,
-                blocks: 1,
-                atime: now,
-                mtime: now,
-                ctime: now,
-                crtime: now,
-                kind: fuse::FileType::RegularFile,
-                perm: 0o444,
-                nlink: 1,
-                uid: 0,
-                gid: 0,
-                rdev: 1,
-                flags: 0,
-            },
+            Entry::Track(track) => {
+                let perm = if track.audio_accessible() { 0o444 } else { 0 };
+                fuse::FileAttr {
+                    ino,
+                    size: 0,
+                    blocks: 1,
+                    atime: now,
+                    mtime: now,
+                    ctime: now,
+                    crtime: now,
+                    kind: fuse::FileType::RegularFile,
+                    perm,
+                    nlink: 1,
+                    uid: 0,
+                    gid: 0,
+                    rdev: 1,
+                    flags: 0,
+                }
+            }
         }
     }
 
@@ -81,9 +84,8 @@ impl<'a> Entry<'a> {
                 if cached.is_some() {
                     return Ok(cached.as_ref().unwrap().clone());
                 }
-                let favorites = user.favorites()?;
-                info!("got {} favorites", favorites.len());
-                let children: Vec<_> = favorites
+                let children: Vec<_> = user
+                    .favorites()?
                     .into_iter()
                     .map(|track| {
                         let title = track
