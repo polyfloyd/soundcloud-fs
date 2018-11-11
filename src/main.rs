@@ -47,9 +47,6 @@ fn main() {
 
     let myself = soundcloud::User::me(&sc_client).unwrap();
 
-    //    let favorites: Result<Vec<_>, _> = myself.favorites(&sc_client);
-    //    info!("{:?}", favorites.unwrap());
-
     let fs = FS::new(Entry::User(myself));
     let path = Path::new("/home/polyfloyd/sc-test");
     fuse::mount(fs, &path, &[]).unwrap();

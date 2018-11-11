@@ -128,20 +128,25 @@ impl Client {
         Ok(())
     }
 
-    pub fn query<T: DeserializeOwned>(
+    pub(crate) fn request(
+        &self,
+        method: reqwest::Method,
+        base_url: impl AsRef<str>,
+    ) -> Result<(reqwest::RequestBuilder, Url), Error> {
+        let url = Url::parse_with_params(base_url.as_ref(), &[("client_id", &self.client_id)])?;
+        let req = self.client.request(method.clone(), url.clone());
+        info!("querying {} {}", method, url);
+        Ok((req, url))
+    }
+
+    pub(crate) fn query<T: DeserializeOwned>(
         &self,
         method: reqwest::Method,
         base_url: impl AsRef<str>,
     ) -> Result<T, Error> {
-        let url = Url::parse_with_params(base_url.as_ref(), &[("client_id", &self.client_id)])?;
-        info!("querying {} {}", method, url);
-
+        let (req, url) = self.request(method.clone(), base_url)?;
         let mut buf = Vec::new();
-        self.client
-            .request(method.clone(), url.clone())
-            .send()?
-            .error_for_status()?
-            .copy_to(&mut buf)?;
+        req.send()?.error_for_status()?.copy_to(&mut buf)?;
 
         match serde_json::from_slice(&buf[..]) {
             Ok(t) => Ok(t),

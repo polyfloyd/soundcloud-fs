@@ -4,12 +4,16 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::ffi;
 use std::hash::{Hash, Hasher};
+use std::io;
 use std::os;
 
 const INO_ROOT: u64 = 1;
 
 pub struct FS<'a> {
     nodes: HashMap<u64, Entry<'a>>,
+
+    read_handles: HashMap<u64, Box<ReadSeek + 'a>>,
+    next_read_handle: u64,
 
     readdir_handles: HashMap<u64, Vec<(String, Entry<'a>, u64)>>,
     next_readdir_handle: u64,
@@ -21,8 +25,10 @@ impl<'a> FS<'a> {
         nodes.insert(INO_ROOT, root);
         FS {
             nodes,
-            next_readdir_handle: 1,
+            read_handles: HashMap::new(),
+            next_read_handle: 1,
             readdir_handles: HashMap::new(),
+            next_readdir_handle: 1,
         }
     }
 }
@@ -92,20 +98,99 @@ impl<'a> fuse::Filesystem for FS<'a> {
         unimplemented!();
     }
 
-    fn open(&mut self, _req: &fuse::Request, _ino: u64, _flags: u32, _reply: fuse::ReplyOpen) {
-        unimplemented!();
+    fn open(&mut self, _req: &fuse::Request, ino: u64, flags: u32, reply: fuse::ReplyOpen) {
+        trace!("fuse open: {}, {:b}", ino, flags);
+
+        const WRITE_FLAGS: i32 = libc::O_APPEND | libc::O_CREAT | libc::O_EXCL | libc::O_TRUNC;
+        if flags & WRITE_FLAGS as u32 != 0 {
+            error!("fuse: encountered write flag {:b}", flags);
+            reply.error(libc::EROFS);
+            return;
+        }
+
+        let entry = match self.nodes.get(&ino) {
+            Some(v) => v,
+            None => {
+                error!("fuse: no such inode: {}", ino);
+                reply.error(libc::ENOENT);
+                return;
+            }
+        };
+        let reader = match entry.open_ro() {
+            Ok(v) => v,
+            Err(err) => {
+                error!("fuse: could not read inode {}: {}", ino, err);
+                reply.error(libc::EIO);
+                return;
+            }
+        };
+
+        let fh = self.next_read_handle;
+        self.next_read_handle += 1;
+        self.read_handles.insert(fh, reader);
+        reply.opened(fh, flags);
     }
 
     fn read(
         &mut self,
         _req: &fuse::Request,
-        _ino: u64,
-        _fh: u64,
-        _offset: i64,
-        _size: u32,
-        _reply: fuse::ReplyData,
+        ino: u64,
+        fh: u64,
+        offset: i64,
+        size: u32,
+        reply: fuse::ReplyData,
     ) {
-        unimplemented!();
+        trace!("fuse read: ino={}, fh={}, offset={}, size={}", ino, fh, offset, size);
+
+        let reader = match self.read_handles.get_mut(&fh) {
+            Some(e) => e,
+            None => {
+                error!("fuse: no such open read handle, {}, inode {}", fh, ino);
+                reply.error(libc::EBADF);
+                return;
+            }
+        };
+
+        if let Err(err) = reader.seek(io::SeekFrom::Start(offset as u64)) {
+            error!("fuse: {}", err);
+            reply.error(libc::EIO);
+            return;
+        }
+        trace!("seek to {} ok", offset);
+        let mut buf = vec![0; size as usize];
+        let nread = match reader.read(&mut buf[..]) {
+            Ok(v) => v,
+            Err(err) => {
+                error!("fuse: {}", err);
+                reply.error(libc::EIO);
+                return;
+            }
+        };
+        trace!("read {} bytes ok", nread);
+        reply.data(&buf[..nread]);
+    }
+
+    fn release(
+        &mut self,
+        _req: &fuse::Request,
+        ino: u64,
+        fh: u64,
+        flags: u32,
+        lock_owner: u64,
+        flush: bool,
+        reply: fuse::ReplyEmpty,
+    ) {
+        trace!(
+            "fuse release: {}, {}, {}, {}, {}",
+            ino,
+            fh,
+            flags,
+            lock_owner,
+            flush
+        );
+
+        self.read_handles.remove(&fh);
+        reply.ok();
     }
 
     fn opendir(
@@ -338,16 +423,6 @@ impl<'a> fuse::Filesystem for FS<'a> {
     //        _ino: u64,
     //        _fh: u64,
     //        _lock_owner: u64,
-    //        reply: ReplyEmpty
-    //    ) { ... }
-    //    fn release(
-    //        &mut self,
-    //        _req: &Request,
-    //        _ino: u64,
-    //        _fh: u64,
-    //        _flags: u32,
-    //        _lock_owner: u64,
-    //        _flush: bool,
     //        reply: ReplyEmpty
     //    ) { ... }
     //    fn fsync(

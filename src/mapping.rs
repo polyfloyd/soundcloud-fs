@@ -1,6 +1,9 @@
 use soundcloud;
 use std::cell::RefCell;
+use std::io;
 use time;
+
+const BLOCK_SIZE: u64 = 1024;
 
 #[derive(Clone, Debug)]
 pub enum Entry<'a> {
@@ -52,8 +55,8 @@ impl<'a> Entry<'a> {
                 let perm = if track.audio_accessible() { 0o444 } else { 0 };
                 fuse::FileAttr {
                     ino,
-                    size: 0,
-                    blocks: 1,
+                    size: track.original_content_size,
+                    blocks: track.original_content_size / BLOCK_SIZE + 1,
                     atime: now,
                     mtime: now,
                     ctime: now,
@@ -114,4 +117,15 @@ impl<'a> Entry<'a> {
             .map(|(_, entry)| entry);
         Ok(child)
     }
+
+    pub fn open_ro(&self) -> Result<Box<ReadSeek + 'a>, soundcloud::Error> {
+        match self {
+            Entry::Track(track) => Ok(Box::new(track.audio()?)),
+            _ => unreachable!("only tracks can be opened for reading"),
+        }
+    }
 }
+
+pub trait ReadSeek: io::Read + io::Seek {}
+
+impl<T> ReadSeek for T where T: io::Read + io::Seek {}
