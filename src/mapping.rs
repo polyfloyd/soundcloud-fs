@@ -1,10 +1,14 @@
 use soundcloud;
+use std::cell::RefCell;
 use time;
 
 #[derive(Clone, Debug)]
 pub enum Entry<'a> {
     User(soundcloud::User<'a>),
-    UserFavorites(soundcloud::User<'a>),
+    UserFavorites {
+        user: soundcloud::User<'a>,
+        cache: RefCell<Option<Vec<(String, Entry<'a>)>>>,
+    },
     Track(soundcloud::Track),
 }
 
@@ -28,7 +32,7 @@ impl<'a> Entry<'a> {
                 rdev: 1,
                 flags: 0,
             },
-            Entry::UserFavorites(_user) => fuse::FileAttr {
+            Entry::UserFavorites { .. } => fuse::FileAttr {
                 ino,
                 size: 0,
                 blocks: 1,
@@ -67,17 +71,30 @@ impl<'a> Entry<'a> {
         match self {
             Entry::User(user) => Ok(vec![(
                 "favorites".to_string(),
-                Entry::UserFavorites(user.clone()),
+                Entry::UserFavorites {
+                    user: user.clone(),
+                    cache: RefCell::new(None),
+                },
             )]),
-            Entry::UserFavorites(user) => {
-                let children = user
-                    .favorites()?
+            Entry::UserFavorites { user, cache } => {
+                let mut cached = cache.borrow_mut();
+                if cached.is_some() {
+                    return Ok(cached.as_ref().unwrap().clone());
+                }
+                let favorites = user.favorites()?;
+                info!("got {} favorites", favorites.len());
+                let children: Vec<_> = favorites
                     .into_iter()
                     .map(|track| {
-                        let title = track.title.replace(char::is_whitespace, "_");
+                        let title = track
+                            .title
+                            .replace(|c: char| !c.is_alphanumeric() && !c.is_whitespace(), "")
+                            .replace("  ", " ")
+                            .replace(|c: char| c.is_whitespace(), "_");
                         let name = format!("{}_{}.mp3", title, track.id);
                         (name, Entry::Track(track))
                     }).collect();
+                *cached = Some(children.clone());
                 Ok(children)
             }
             Entry::Track(_) => unreachable!("tracks do not have child files"),

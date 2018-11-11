@@ -169,21 +169,21 @@ impl<'a> fuse::Filesystem for FS<'a> {
     fn readdir(
         &mut self,
         _req: &fuse::Request,
-        ino: u64,
+        parent_ino: u64,
         fh: u64,
         offset: i64,
         mut reply: fuse::ReplyDirectory,
     ) {
-        trace!("fuse readdir: {}, {}, {}", ino, fh, offset);
+        trace!("fuse readdir: {}, {}, {}", parent_ino, fh, offset);
 
         let entries = match self.readdir_handles.get(&fh) {
             Some(e) => e,
             None => {
                 error!(
                     "fuse: no open readdir handle for handle {}, inode {}",
-                    fh, ino
+                    fh, parent_ino
                 );
-                reply.error(libc::ENOENT);
+                reply.error(libc::EBADF);
                 return;
             }
         };
@@ -202,12 +202,12 @@ impl<'a> fuse::Filesystem for FS<'a> {
     fn releasedir(
         &mut self,
         _req: &fuse::Request,
-        ino: u64,
+        parent_ino: u64,
         fh: u64,
         flags: u32,
         reply: fuse::ReplyEmpty,
     ) {
-        trace!("fuse releasedir: {}, {}, {}", ino, fh, flags);
+        trace!("fuse releasedir: {}, {}, {}", parent_ino, fh, flags);
 
         self.readdir_handles.remove(&fh);
         reply.ok();
