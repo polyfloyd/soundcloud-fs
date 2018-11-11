@@ -1,5 +1,9 @@
+use super::{Client, Error};
+use reqwest::Url;
+use std::io;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Track {
+pub struct Track<'a> {
     pub id: i64,
     pub created_at: String,
     pub user_id: i64,
@@ -51,6 +55,29 @@ pub struct Track {
     //"reposts_count": 0,
     //"policy": "ALLOW",
     //"monetization_model": "NOT_APPLICABLE"
+    #[serde(skip_deserializing, skip_serializing)]
+    pub(crate) client: Option<&'a Client>,
+}
+
+impl<'a> Track<'a> {
+    pub fn audio_accessible(&self) -> bool {
+        self.download_url.is_some()
+    }
+
+    pub fn audio(&self) -> Result<impl io::Read, Error> {
+        if let Some(raw_url) = self.download_url.as_ref() {
+            let res = self
+                .client
+                .unwrap()
+                .client
+                .get(Url::parse(raw_url)?)
+                .send()?
+                .error_for_status()?;
+            Ok(res)
+        } else {
+            Err(Error::AudioNotAccessible)
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

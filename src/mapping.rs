@@ -9,7 +9,7 @@ pub enum Entry<'a> {
         user: soundcloud::User<'a>,
         cache: RefCell<Option<Vec<(String, Entry<'a>)>>>,
     },
-    Track(soundcloud::Track),
+    Track(soundcloud::Track<'a>),
 }
 
 impl<'a> Entry<'a> {

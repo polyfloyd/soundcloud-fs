@@ -6,6 +6,9 @@ pub enum Error {
     #[fail(display = "login failed")]
     Login,
 
+    #[fail(display = "audio not accessible")]
+    AudioNotAccessible,
+
     #[fail(display = "could not load client form cache: {}", _0)]
     FromCache(Box<error::Error + Send + Sync>),
 

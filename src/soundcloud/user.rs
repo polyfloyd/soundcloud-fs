@@ -79,8 +79,12 @@ impl<'a> User<'a> {
         rs
     }
 
-    pub fn favorites(&self) -> Result<Vec<Track>, Error> {
+    pub fn favorites(&self) -> Result<Vec<Track<'a>>, Error> {
         let url = format!("https://api.soundcloud.com/users/{}/favorites", self.id);
-        self.client.unwrap().query(Method::GET, url)
+        let mut tracks: Vec<Track> = self.client.unwrap().query(Method::GET, url)?;
+        for track in &mut tracks {
+            track.client = self.client;
+        }
+        Ok(tracks)
     }
 }
