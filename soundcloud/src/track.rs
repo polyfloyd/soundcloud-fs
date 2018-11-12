@@ -26,7 +26,7 @@ pub struct Track<'a> {
     //"purchase_title": null,
     pub genre: String,
     pub title: String,
-    pub description: String,
+    pub description: Option<String>,
     //"label_name": null,
     //"release": null,
     //"track_type": null,
