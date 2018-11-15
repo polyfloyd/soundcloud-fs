@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use filesystem;
 use soundcloud;
 use time;
@@ -36,66 +37,76 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
     type Error = Error;
 
     fn file_attributes(&self, ino: u64) -> fuse::FileAttr {
-        let now = time::now().to_timespec();
         match self {
-            Entry::User(_user) => fuse::FileAttr {
-                ino,
-                size: 0,
-                blocks: 1,
-                atime: now,
-                mtime: now,
-                ctime: now,
-                crtime: now,
-                kind: fuse::FileType::Directory,
-                perm: 0o555,
-                nlink: 1,
-                uid: 0,
-                gid: 0,
-                rdev: 1,
-                flags: 0,
-            },
-            Entry::UserFavorites(_) => fuse::FileAttr {
-                ino,
-                size: 0,
-                blocks: 1,
-                atime: now,
-                mtime: now,
-                ctime: now,
-                crtime: now,
-                kind: fuse::FileType::Directory,
-                perm: 0o555,
-                nlink: 1,
-                uid: 0,
-                gid: 0,
-                rdev: 1,
-                flags: 0,
-            },
-            Entry::UserFollowing(_) => fuse::FileAttr {
-                ino,
-                size: 0,
-                blocks: 1,
-                atime: now,
-                mtime: now,
-                ctime: now,
-                crtime: now,
-                kind: fuse::FileType::Directory,
-                perm: 0o555,
-                nlink: 1,
-                uid: 0,
-                gid: 0,
-                rdev: 1,
-                flags: 0,
-            },
+            Entry::User(user) => {
+                let mtime = timespec_from_datetime(&user.last_modified);
+                fuse::FileAttr {
+                    ino,
+                    size: 0,
+                    blocks: 1,
+                    atime: mtime,
+                    mtime,
+                    ctime: mtime,
+                    crtime: mtime,
+                    kind: fuse::FileType::Directory,
+                    perm: 0o555,
+                    nlink: 1,
+                    uid: 0,
+                    gid: 0,
+                    rdev: 1,
+                    flags: 0,
+                }
+            }
+            Entry::UserFavorites(user) => {
+                let mtime = timespec_from_datetime(&user.last_modified);
+                fuse::FileAttr {
+                    ino,
+                    size: 0,
+                    blocks: 1,
+                    atime: mtime,
+                    mtime,
+                    ctime: mtime,
+                    crtime: mtime,
+                    kind: fuse::FileType::Directory,
+                    perm: 0o555,
+                    nlink: 1,
+                    uid: 0,
+                    gid: 0,
+                    rdev: 1,
+                    flags: 0,
+                }
+            }
+            Entry::UserFollowing(user) => {
+                let mtime = timespec_from_datetime(&user.last_modified);
+                fuse::FileAttr {
+                    ino,
+                    size: 0,
+                    blocks: 1,
+                    atime: mtime,
+                    mtime,
+                    ctime: mtime,
+                    crtime: mtime,
+                    kind: fuse::FileType::Directory,
+                    perm: 0o555,
+                    nlink: 1,
+                    uid: 0,
+                    gid: 0,
+                    rdev: 1,
+                    flags: 0,
+                }
+            }
             Entry::Track(track) => {
                 let perm = if track.audio_accessible() { 0o444 } else { 0 };
+                let ctime = timespec_from_datetime(&track.created_at);
+                let mtime = timespec_from_datetime(&track.last_modified);
                 fuse::FileAttr {
                     ino,
                     size: track.original_content_size,
                     blocks: track.original_content_size / BLOCK_SIZE + 1,
-                    atime: now,
-                    mtime: now,
-                    ctime: now,
-                    crtime: now,
+                    atime: mtime,
+                    mtime,
+                    ctime,
+                    crtime: ctime,
                     kind: fuse::FileType::RegularFile,
                     perm,
                     nlink: 1,
@@ -161,4 +172,8 @@ fn map_track_to_child(track: soundcloud::Track) -> (String, Entry) {
         .replace(|c: char| c.is_whitespace(), "_");
     let name = format!("{}_{}.mp3", title, track.id);
     (name, Entry::Track(track))
+}
+
+fn timespec_from_datetime(t: &DateTime<Utc>) -> time::Timespec {
+    time::Timespec::new(t.timestamp(), t.timestamp_subsec_nanos() as i32)
 }

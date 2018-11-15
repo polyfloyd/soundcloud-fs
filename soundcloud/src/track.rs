@@ -1,4 +1,5 @@
-use super::{Client, Error};
+use super::*;
+use chrono::{DateTime, Utc};
 use reqwest::header::{self, HeaderValue};
 use reqwest::{Method, StatusCode, Url};
 use std::io;
@@ -6,14 +7,16 @@ use std::io;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Track<'a> {
     pub id: i64,
-    pub created_at: String,
+    #[serde(with = "date_format")]
+    pub created_at: DateTime<Utc>,
     pub user_id: i64,
     // Duration in milliseconds
     pub duration: i64,
     pub commentable: bool,
     pub state: String,
     pub original_content_size: u64,
-    pub last_modified: String,
+    #[serde(with = "date_format")]
+    pub last_modified: DateTime<Utc>,
     pub sharing: String,
     pub tag_list: String,
     pub permalink: String,

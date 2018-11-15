@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["polyfloyd <floyd@polyfloyd.net>"]
 
 [dependencies]
+chrono = "*"
 env_logger = "*"
 failure = "*"
 failure_derive = "*"

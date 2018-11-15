@@ -1,5 +1,6 @@
 use super::*;
 use super::{Client, Error};
+use chrono::{DateTime, Utc};
 use reqwest::Method;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -11,7 +12,8 @@ pub struct User<'a> {
     /// Username, e.g. "Doctor Wilson"
     pub username: String,
     /// Last modified timestamp, e.g. "2017/09/24 09:15:49 +0000"
-    pub last_modified: String,
+    #[serde(with = "date_format")]
+    pub last_modified: DateTime<Utc>,
     /// API resource URL, e.g. "http://api.soundcloud.com/comments/32562"
     pub uri: String,
     /// URL to the SoundCloud.com page, e.g. "http://soundcloud.com/bryan/sbahn-sounds"
