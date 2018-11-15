@@ -1,15 +1,11 @@
 use filesystem;
 use soundcloud;
-use std::cell::RefCell;
 use time;
 
 const BLOCK_SIZE: u64 = 1024;
 
 #[derive(Debug, Fail)]
 pub enum Error {
-    #[fail(display = "no such file")]
-    NoSuchFile,
-
     #[fail(display = "soundcloud error: {}", _0)]
     SoundCloudError(soundcloud::Error),
 }
@@ -17,7 +13,6 @@ pub enum Error {
 impl filesystem::Error for Error {
     fn errno(&self) -> i32 {
         match self {
-            Error::NoSuchFile => libc::ENOENT,
             Error::SoundCloudError(_) => libc::EIO,
         }
     }
@@ -32,10 +27,7 @@ impl From<soundcloud::Error> for Error {
 #[derive(Clone, Debug)]
 pub enum Entry<'a> {
     User(soundcloud::User<'a>),
-    UserFavorites {
-        user: soundcloud::User<'a>,
-        cache: RefCell<Option<Vec<(String, Entry<'a>)>>>,
-    },
+    UserFavorites(soundcloud::User<'a>),
     Track(soundcloud::Track<'a>),
 }
 
@@ -110,16 +102,9 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
         match self {
             Entry::User(user) => Ok(vec![(
                 "favorites".to_string(),
-                Entry::UserFavorites {
-                    user: user.clone(),
-                    cache: RefCell::new(None),
-                },
+                Entry::UserFavorites(user.clone()),
             )]),
-            Entry::UserFavorites { user, cache } => {
-                let mut cached = cache.borrow_mut();
-                if cached.is_some() {
-                    return Ok(cached.as_ref().unwrap().clone());
-                }
+            Entry::UserFavorites(user) => {
                 let children: Vec<_> = user
                     .favorites()?
                     .into_iter()
@@ -132,20 +117,9 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
                         let name = format!("{}_{}.mp3", title, track.id);
                         (name, Entry::Track(track))
                     }).collect();
-                *cached = Some(children.clone());
                 Ok(children)
             }
             Entry::Track(_) => unreachable!("tracks do not have child files"),
         }
-    }
-
-    fn child_by_name(&self, child_name: impl AsRef<str>) -> Result<Self, Self::Error> {
-        let child = self
-            .children()?
-            .into_iter()
-            .find(|(name, _)| name == child_name.as_ref())
-            .map(|(_, entry)| entry)
-            .ok_or(Error::NoSuchFile)?;
-        Ok(child)
     }
 }

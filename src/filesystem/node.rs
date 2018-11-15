@@ -14,8 +14,6 @@ pub trait Node<'a>: Sized {
     fn open_ro(&self) -> Result<Box<ReadSeek + 'a>, Self::Error>;
 
     fn children(&self) -> Result<Vec<(String, Self)>, Self::Error>;
-
-    fn child_by_name(&self, child_name: impl AsRef<str>) -> Result<Self, Self::Error>;
 }
 
 pub trait ReadSeek: io::Read + io::Seek {}

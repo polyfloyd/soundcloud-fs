@@ -1,4 +1,5 @@
 mod node;
+mod nodecache;
 
 use fuse;
 use std::collections::hash_map::DefaultHasher;
@@ -9,6 +10,7 @@ use std::io;
 use std::os;
 
 pub use self::node::*;
+pub use self::nodecache::*;
 
 const INO_ROOT: u64 = 1;
 
@@ -74,22 +76,28 @@ where
                     return;
                 }
             };
-            match parent.child_by_name(&name) {
+            let children = match parent.children() {
                 Ok(v) => v,
                 Err(err) => {
-                    if err.errno() != libc::ENOENT {
-                        error!("fuse: could not get child {}: {}", name, err);
-                    }
+                    error!("fuse: could not get child {}: {}", name, err);
                     reply.error(err.errno());
                     return;
                 }
-            }
+            };
+            children
+                .into_iter()
+                .find(|(n, _)| n == &name)
+                .map(|(_, entry)| entry)
         };
-        let child_ino = inode_for_child(parent_ino, &name);
-        let attrs = child.file_attributes(child_ino);
-        self.nodes.insert(child_ino, child);
-        let now = time::now().to_timespec();
-        reply.entry(&now, &attrs, 0);
+        if let Some(child) = child {
+            let child_ino = inode_for_child(parent_ino, &name);
+            let attrs = child.file_attributes(child_ino);
+            self.nodes.insert(child_ino, child);
+            let now = time::now().to_timespec();
+            reply.entry(&now, &attrs, 0);
+        } else {
+            reply.error(libc::ENOENT);
+        }
     }
 
     fn getattr(&mut self, _req: &fuse::Request, ino: u64, reply: fuse::ReplyAttr) {

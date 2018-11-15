@@ -49,7 +49,7 @@ fn main() {
 
     let myself = soundcloud::User::me(&sc_client).unwrap();
 
-    let fs = FS::new(Entry::User(myself));
+    let fs = FS::new(NodeCache::new(Entry::User(myself)));
     let path = Path::new("/home/polyfloyd/sc-test");
     fuse::mount(fs, &path, &[]).unwrap();
 }
