@@ -96,7 +96,6 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
                 }
             }
             Entry::Track(track) => {
-                let perm = if track.audio_accessible() { 0o444 } else { 0 };
                 let ctime = timespec_from_datetime(&track.created_at);
                 let mtime = timespec_from_datetime(&track.last_modified);
                 fuse::FileAttr {
@@ -108,7 +107,7 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
                     ctime,
                     crtime: ctime,
                     kind: fuse::FileType::RegularFile,
-                    perm,
+                    perm: 0o444,
                     nlink: 1,
                     uid: 0,
                     gid: 0,
@@ -165,12 +164,15 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
 }
 
 fn map_track_to_child(track: soundcloud::Track) -> (String, Entry) {
-    let title = track
-        .title
-        .replace(|c: char| !c.is_alphanumeric() && !c.is_whitespace(), "")
-        .replace("  ", " ")
-        .replace(|c: char| c.is_whitespace(), "_");
-    let name = format!("{}_{}.mp3", title, track.id);
+    let name = {
+        let title = track
+            .title
+            .replace(|c: char| !c.is_alphanumeric() && !c.is_whitespace(), "")
+            .replace("  ", " ")
+            .replace(|c: char| c.is_whitespace(), "_");
+        let ext = track.audio_format();
+        format!("{}_{}.{}", title, track.id, ext)
+    };
     (name, Entry::Track(track))
 }
 

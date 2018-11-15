@@ -40,7 +40,7 @@ pub struct Track<'a> {
     //"release_year": null,
     //"release_month": null,
     //"release_day": null,
-    //"original_format": "mp3",
+    pub original_format: Option<String>,
     //"license": "all-rights-reserved",
     pub uri: String,
     pub user: TrackUser,
@@ -64,29 +64,49 @@ pub struct Track<'a> {
 }
 
 impl<'a> Track<'a> {
-    pub fn audio_accessible(&self) -> bool {
-        self.download_url.is_some()
+    pub fn audio_format(&self) -> &str {
+        if self.download_url.is_none() {
+            return "mp3";
+        }
+        match self.original_format.as_ref().map(|s| s.as_str()) {
+            Some("raw") => "mp3",
+            Some(s) => s,
+            None => "mp3",
+        }
     }
 
     pub fn audio(&self) -> Result<impl io::Read + io::Seek + 'a, Error> {
+        let sc_client = self.client.unwrap();
+
         if let Some(raw_url) = self.download_url.as_ref() {
-            let sc_client = self.client.unwrap();
+            info!("accessing audio through the download URL");
             let (req_builder, _) = sc_client.request(Method::GET, Url::parse(raw_url)?)?;
             let req = req_builder.build()?;
-            let res = sc_client
-                .client
-                .execute(clone_request(&req))?
-                .error_for_status()?;
-            Ok(RangeSeeker {
-                req,
-                res,
-                current_offset: 0,
-                client: &sc_client.client,
-            })
-        } else {
-            Err(Error::AudioNotAccessible)
+            return RangeSeeker::new(&sc_client.client, req);
         }
+
+        info!("accessing audio through the streams API");
+        lazy_static! {
+            static ref DEFAULT_CLIENT: reqwest::Client = reqwest::Client::builder()
+                .default_headers(default_headers())
+                .build()
+                .unwrap();
+        }
+        let raw_url = format!("https://api.soundcloud.com/i1/tracks/{}/streams", self.id);
+        let streams: StreamInfo = sc_client.query(Method::GET, &raw_url)?;
+        let req = DEFAULT_CLIENT
+            .request(Method::GET, Url::parse(&streams.http_mp3_128_url)?)
+            .build()?;
+        RangeSeeker::new(&DEFAULT_CLIENT, req)
     }
+}
+
+#[derive(Deserialize)]
+struct StreamInfo {
+    http_mp3_128_url: String,
+    //hls_mp3_128_url: String,
+    //hls_opus_64_url: String,
+    //preview_mp3_128_url: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -105,6 +125,18 @@ struct RangeSeeker<'a> {
     res: reqwest::Response,
     current_offset: u64,
     client: &'a reqwest::Client,
+}
+
+impl<'a> RangeSeeker<'a> {
+    fn new(client: &reqwest::Client, req: reqwest::Request) -> Result<RangeSeeker, Error> {
+        let res = client.execute(clone_request(&req))?.error_for_status()?;
+        Ok(RangeSeeker {
+            req,
+            res,
+            current_offset: 0,
+            client,
+        })
+    }
 }
 
 impl<'a> io::Read for RangeSeeker<'a> {

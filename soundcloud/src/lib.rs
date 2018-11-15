@@ -8,6 +8,8 @@ extern crate failure;
 #[macro_use]
 extern crate failure_derive;
 #[macro_use]
+extern crate lazy_static;
+#[macro_use]
 extern crate log;
 extern crate reqwest;
 extern crate serde;
@@ -31,7 +33,7 @@ pub use self::user::User;
 const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64; rv:63.0) Gecko/20100101 Firefox/63.0";
 const CLIENT_ID: &str = "Ine5MMVzbMYXUSWyEkyHNWzC7p8wKpzb";
 
-fn default_headers() -> header::HeaderMap {
+pub(crate) fn default_headers() -> header::HeaderMap {
     let mut headers = header::HeaderMap::new();
     headers.insert(
         header::USER_AGENT,

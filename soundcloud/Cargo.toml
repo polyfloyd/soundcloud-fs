@@ -7,6 +7,7 @@ authors = ["polyfloyd <floyd@polyfloyd.net>"]
 chrono = "*"
 failure = "*"
 failure_derive = "*"
+lazy_static = "1.2.0"
 log = "*"
 reqwest = "*"
 serde = "1.0"
