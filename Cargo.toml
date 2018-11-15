@@ -6,11 +6,12 @@ authors = ["polyfloyd <floyd@polyfloyd.net>"]
 [dependencies]
 env_logger = "*"
 failure = "*"
+failure_derive = "*"
 fuse = "0.3.1"
 libc = "*"
 log = "*"
-time = "*"
 soundcloud = { path = "./soundcloud" }
+time = "*"
 
 [workspace]
 members = [

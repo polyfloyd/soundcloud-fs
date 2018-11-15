@@ -1,9 +1,33 @@
+use filesystem;
 use soundcloud;
 use std::cell::RefCell;
-use std::io;
 use time;
 
 const BLOCK_SIZE: u64 = 1024;
+
+#[derive(Debug, Fail)]
+pub enum Error {
+    #[fail(display = "no such file")]
+    NoSuchFile,
+
+    #[fail(display = "soundcloud error: {}", _0)]
+    SoundCloudError(soundcloud::Error),
+}
+
+impl filesystem::Error for Error {
+    fn errno(&self) -> i32 {
+        match self {
+            Error::NoSuchFile => libc::ENOENT,
+            Error::SoundCloudError(_) => libc::EIO,
+        }
+    }
+}
+
+impl From<soundcloud::Error> for Error {
+    fn from(err: soundcloud::Error) -> Error {
+        Error::SoundCloudError(err)
+    }
+}
 
 #[derive(Clone, Debug)]
 pub enum Entry<'a> {
@@ -15,8 +39,10 @@ pub enum Entry<'a> {
     Track(soundcloud::Track<'a>),
 }
 
-impl<'a> Entry<'a> {
-    pub fn file_attributes(&self, ino: u64) -> fuse::FileAttr {
+impl<'a> filesystem::Node<'a> for Entry<'a> {
+    type Error = Error;
+
+    fn file_attributes(&self, ino: u64) -> fuse::FileAttr {
         let now = time::now().to_timespec();
         match self {
             Entry::User(_user) => fuse::FileAttr {
@@ -73,7 +99,14 @@ impl<'a> Entry<'a> {
         }
     }
 
-    pub fn children(&self) -> Result<Vec<(String, Entry<'a>)>, soundcloud::Error> {
+    fn open_ro(&self) -> Result<Box<filesystem::ReadSeek + 'a>, Error> {
+        match self {
+            Entry::Track(track) => Ok(Box::new(track.audio()?)),
+            _ => unreachable!("only tracks can be opened for reading"),
+        }
+    }
+
+    fn children(&self) -> Result<Vec<(String, Entry<'a>)>, Error> {
         match self {
             Entry::User(user) => Ok(vec![(
                 "favorites".to_string(),
@@ -106,26 +139,13 @@ impl<'a> Entry<'a> {
         }
     }
 
-    pub fn child_by_name(
-        &self,
-        child_name: impl AsRef<str>,
-    ) -> Result<Option<Entry<'a>>, soundcloud::Error> {
+    fn child_by_name(&self, child_name: impl AsRef<str>) -> Result<Self, Self::Error> {
         let child = self
             .children()?
             .into_iter()
             .find(|(name, _)| name == child_name.as_ref())
-            .map(|(_, entry)| entry);
+            .map(|(_, entry)| entry)
+            .ok_or(Error::NoSuchFile)?;
         Ok(child)
     }
-
-    pub fn open_ro(&self) -> Result<Box<ReadSeek + 'a>, soundcloud::Error> {
-        match self {
-            Entry::Track(track) => Ok(Box::new(track.audio()?)),
-            _ => unreachable!("only tracks can be opened for reading"),
-        }
-    }
 }
-
-pub trait ReadSeek: io::Read + io::Seek {}
-
-impl<T> ReadSeek for T where T: io::Read + io::Seek {}

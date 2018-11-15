@@ -1,5 +1,7 @@
 extern crate env_logger;
 extern crate failure;
+#[macro_use]
+extern crate failure_derive;
 extern crate fuse;
 extern crate libc;
 #[macro_use]
@@ -7,10 +9,10 @@ extern crate log;
 extern crate soundcloud;
 extern crate time;
 
-mod fs;
+mod filesystem;
 mod mapping;
 
-use self::fs::*;
+use self::filesystem::*;
 use self::mapping::*;
 use std::env;
 use std::path::Path;

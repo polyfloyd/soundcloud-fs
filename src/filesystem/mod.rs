@@ -1,5 +1,6 @@
+mod node;
+
 use fuse;
-use mapping::*;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::ffi;
@@ -7,20 +8,28 @@ use std::hash::{Hash, Hasher};
 use std::io;
 use std::os;
 
+pub use self::node::*;
+
 const INO_ROOT: u64 = 1;
 
-pub struct FS<'a> {
-    nodes: HashMap<u64, Entry<'a>>,
+pub struct FS<'a, E>
+where
+    E: Node<'a>,
+{
+    nodes: HashMap<u64, E>,
 
     read_handles: HashMap<u64, Box<ReadSeek + 'a>>,
     next_read_handle: u64,
 
-    readdir_handles: HashMap<u64, Vec<(String, Entry<'a>, u64)>>,
+    readdir_handles: HashMap<u64, Vec<(String, E, u64)>>,
     next_readdir_handle: u64,
 }
 
-impl<'a> FS<'a> {
-    pub fn new(root: Entry) -> FS {
+impl<'a, E> FS<'a, E>
+where
+    E: Node<'a>,
+{
+    pub fn new(root: E) -> FS<'a, E> {
         let mut nodes = HashMap::new();
         nodes.insert(INO_ROOT, root);
         FS {
@@ -33,7 +42,10 @@ impl<'a> FS<'a> {
     }
 }
 
-impl<'a> fuse::Filesystem for FS<'a> {
+impl<'a, E> fuse::Filesystem for FS<'a, E>
+where
+    E: Node<'a>,
+{
     fn init(&mut self, _req: &fuse::Request) -> Result<(), os::raw::c_int> {
         trace!("fuse init");
         Ok(())
@@ -65,21 +77,19 @@ impl<'a> fuse::Filesystem for FS<'a> {
             match parent.child_by_name(&name) {
                 Ok(v) => v,
                 Err(err) => {
-                    error!("fuse: could not get child {}: {}", name, err);
-                    reply.error(libc::EIO);
+                    if err.errno() != libc::ENOENT {
+                        error!("fuse: could not get child {}: {}", name, err);
+                    }
+                    reply.error(err.errno());
                     return;
                 }
             }
         };
-        if let Some(child) = child {
-            let child_ino = inode_for_child(parent_ino, &name);
-            let attrs = child.file_attributes(child_ino);
-            self.nodes.insert(child_ino, child);
-            let now = time::now().to_timespec();
-            reply.entry(&now, &attrs, 0);
-        } else {
-            reply.error(libc::ENOENT);
-        }
+        let child_ino = inode_for_child(parent_ino, &name);
+        let attrs = child.file_attributes(child_ino);
+        self.nodes.insert(child_ino, child);
+        let now = time::now().to_timespec();
+        reply.entry(&now, &attrs, 0);
     }
 
     fn getattr(&mut self, _req: &fuse::Request, ino: u64, reply: fuse::ReplyAttr) {
