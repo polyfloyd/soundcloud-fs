@@ -28,6 +28,7 @@ impl From<soundcloud::Error> for Error {
 pub enum Entry<'a> {
     User(soundcloud::User<'a>),
     UserFavorites(soundcloud::User<'a>),
+    UserFollowing(soundcloud::User<'a>),
     Track(soundcloud::Track<'a>),
 }
 
@@ -53,7 +54,23 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
                 rdev: 1,
                 flags: 0,
             },
-            Entry::UserFavorites { .. } => fuse::FileAttr {
+            Entry::UserFavorites(_) => fuse::FileAttr {
+                ino,
+                size: 0,
+                blocks: 1,
+                atime: now,
+                mtime: now,
+                ctime: now,
+                crtime: now,
+                kind: fuse::FileType::Directory,
+                perm: 0o555,
+                nlink: 1,
+                uid: 0,
+                gid: 0,
+                rdev: 1,
+                flags: 0,
+            },
+            Entry::UserFollowing(_) => fuse::FileAttr {
                 ino,
                 size: 0,
                 blocks: 1,
@@ -100,26 +117,48 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
 
     fn children(&self) -> Result<Vec<(String, Entry<'a>)>, Error> {
         match self {
-            Entry::User(user) => Ok(vec![(
-                "favorites".to_string(),
-                Entry::UserFavorites(user.clone()),
-            )]),
+            Entry::User(user) => {
+                let mut children = Vec::new();
+                children.push(("favorites".to_string(), Entry::UserFavorites(user.clone())));
+                if user.primary_email_confirmed.is_some() {
+                    // Only add the following directory for the logged in user to prevent recursing
+                    // too deeply.
+                    children.push(("following".to_string(), Entry::UserFollowing(user.clone())));
+                }
+                children.extend(
+                    user.tracks()?
+                        .into_iter()
+                        .map(|track| map_track_to_child(track)),
+                );
+                Ok(children)
+            }
             Entry::UserFavorites(user) => {
                 let children: Vec<_> = user
                     .favorites()?
                     .into_iter()
-                    .map(|track| {
-                        let title = track
-                            .title
-                            .replace(|c: char| !c.is_alphanumeric() && !c.is_whitespace(), "")
-                            .replace("  ", " ")
-                            .replace(|c: char| c.is_whitespace(), "_");
-                        let name = format!("{}_{}.mp3", title, track.id);
-                        (name, Entry::Track(track))
-                    }).collect();
+                    .map(|track| map_track_to_child(track))
+                    .collect();
+                Ok(children)
+            }
+            Entry::UserFollowing(user) => {
+                let children: Vec<_> = user
+                    .following()?
+                    .into_iter()
+                    .map(|user| (user.permalink.clone(), Entry::User(user)))
+                    .collect();
                 Ok(children)
             }
             Entry::Track(_) => unreachable!("tracks do not have child files"),
         }
     }
+}
+
+fn map_track_to_child(track: soundcloud::Track) -> (String, Entry) {
+    let title = track
+        .title
+        .replace(|c: char| !c.is_alphanumeric() && !c.is_whitespace(), "")
+        .replace("  ", " ")
+        .replace(|c: char| c.is_whitespace(), "_");
+    let name = format!("{}_{}.mp3", title, track.id);
+    (name, Entry::Track(track))
 }

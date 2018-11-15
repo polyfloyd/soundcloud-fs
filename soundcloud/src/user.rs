@@ -1,4 +1,4 @@
-use super::track::*;
+use super::*;
 use super::{Client, Error};
 use reqwest::Method;
 
@@ -19,19 +19,19 @@ pub struct User<'a> {
     /// URL to a JPEG image, e.g. "http://i1.sndcdn.com/avatars-000011353294-n0axp1-large.jpg"
     pub avatar_url: String,
     /// Country, e.g. "Germany"
-    pub country: String,
+    pub country: Option<String>,
     /// First and last name, e.g. "Tom Wilson"
     pub full_name: String,
     /// City, e.g. "Berlin"
-    pub city: String,
+    pub city: Option<String>,
     /// Description, e.g. "Buskers playing in the S-Bahn station in Berlin"
-    pub description: String,
+    pub description: Option<String>,
     /// Discogs name, e.g. "myrandomband"
     pub discogs_name: Option<String>,
     /// MySpace name, e.g. "myrandomband"
     pub myspace_name: Option<String>,
     /// A URL to the website, e.g. "http://facebook.com/myrandomband"
-    pub website: String,
+    pub website: Option<String>,
     /// A custom title for the website, e.g. "myrandomband on Facebook"
     pub website_title: Option<String>,
     /// Online status
@@ -47,13 +47,13 @@ pub struct User<'a> {
     // Number of favorited public tracks
     pub public_favorites_count: i64,
     // Subscription plan of the user, e.g. "Pro Plus"
-    pub plan: String,
+    pub plan: Option<String>,
     // Number of private tracks
-    pub private_tracks_count: i64,
+    pub private_tracks_count: Option<i64>,
     // Number of private playlists
-    pub private_playlists_count: i64,
+    pub private_playlists_count: Option<i64>,
     // Boolean if email is confirmed
-    pub primary_email_confirmed: bool,
+    pub primary_email_confirmed: Option<bool>,
 
     #[serde(skip_deserializing, skip_serializing)]
     client: Option<&'a Client>,
@@ -79,6 +79,15 @@ impl<'a> User<'a> {
         rs
     }
 
+    pub fn tracks(&self) -> Result<Vec<Track<'a>>, Error> {
+        let url = format!("https://api.soundcloud.com/users/{}/tracks", self.id);
+        let mut tracks: Vec<Track> = self.client.unwrap().query(Method::GET, url)?;
+        for track in &mut tracks {
+            track.client = self.client;
+        }
+        Ok(tracks)
+    }
+
     pub fn favorites(&self) -> Result<Vec<Track<'a>>, Error> {
         let url = format!("https://api.soundcloud.com/users/{}/favorites", self.id);
         let mut tracks: Vec<Track> = self.client.unwrap().query(Method::GET, url)?;
@@ -86,5 +95,16 @@ impl<'a> User<'a> {
             track.client = self.client;
         }
         Ok(tracks)
+    }
+
+    pub fn following(&self) -> Result<Vec<User<'a>>, Error> {
+        let url = format!("https://api.soundcloud.com/users/{}/followings", self.id);
+        let page: Page<User> = self.client.unwrap().query(Method::GET, url)?;
+        let mut users = page.collection;
+        for user in &mut users {
+            user.client = self.client;
+        }
+        let _ = page.next_href; // TODO: Load next pages?
+        Ok(users)
     }
 }

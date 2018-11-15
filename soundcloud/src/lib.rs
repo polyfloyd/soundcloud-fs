@@ -204,6 +204,12 @@ struct Session {
     access_token: String,
 }
 
+#[derive(Deserialize)]
+struct Page<T> {
+    collection: Vec<T>,
+    next_href: Option<String>,
+}
+
 // Common API headers
 //
 // GET /me/play-history/tracks?client_id=Ine5MMVzbMYXUSWyEkyHNWzC7p8wKpzb&limit=25&offset=0&linked_partitioning=1&app_version=1541509103&app_locale=en HTTP/1.1

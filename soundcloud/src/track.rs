@@ -24,7 +24,7 @@ pub struct Track<'a> {
     pub download_url: Option<String>,
     //"label_id": null,
     //"purchase_title": null,
-    pub genre: String,
+    pub genre: Option<String>,
     pub title: String,
     pub description: Option<String>,
     //"label_name": null,
