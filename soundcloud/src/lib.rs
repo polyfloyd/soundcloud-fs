@@ -2,6 +2,7 @@ mod date_format;
 mod error;
 mod track;
 mod user;
+pub(crate) mod util;
 
 extern crate chrono;
 extern crate failure;
