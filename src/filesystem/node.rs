@@ -1,6 +1,6 @@
 use super::*;
 use failure::Fail;
-use std::io;
+use ioutil::*;
 
 pub trait Error: Fail {
     fn errno(&self) -> i32;
@@ -15,7 +15,3 @@ pub trait Node<'a>: Sized {
 
     fn children(&self) -> Result<Vec<(String, Self)>, Self::Error>;
 }
-
-pub trait ReadSeek: io::Read + io::Seek {}
-
-impl<T> ReadSeek for T where T: io::Read + io::Seek {}

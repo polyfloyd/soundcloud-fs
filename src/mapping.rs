@@ -1,6 +1,9 @@
 use chrono::{DateTime, Utc};
 use filesystem;
+use id3;
+use ioutil;
 use soundcloud;
+use std::io;
 use time;
 
 const BLOCK_SIZE: u64 = 1024;
@@ -9,12 +12,20 @@ const BLOCK_SIZE: u64 = 1024;
 pub enum Error {
     #[fail(display = "soundcloud error: {}", _0)]
     SoundCloudError(soundcloud::Error),
+
+    #[fail(display = "io error: {}", _0)]
+    IOError(io::Error),
+
+    #[fail(display = "id3 error: {}", _0)]
+    ID3Error(id3::Error),
 }
 
 impl filesystem::Error for Error {
     fn errno(&self) -> i32 {
         match self {
             Error::SoundCloudError(_) => libc::EIO,
+            Error::IOError(err) => err.raw_os_error().unwrap_or(libc::EIO),
+            Error::ID3Error(_) => libc::EIO,
         }
     }
 }
@@ -22,6 +33,18 @@ impl filesystem::Error for Error {
 impl From<soundcloud::Error> for Error {
     fn from(err: soundcloud::Error) -> Error {
         Error::SoundCloudError(err)
+    }
+}
+
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Error {
+        Error::IOError(err)
+    }
+}
+
+impl From<id3::Error> for Error {
+    fn from(err: id3::Error) -> Error {
+        Error::ID3Error(err)
     }
 }
 
@@ -118,9 +141,19 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
         }
     }
 
-    fn open_ro(&self) -> Result<Box<filesystem::ReadSeek + 'a>, Error> {
+    fn open_ro(&self) -> Result<Box<ioutil::ReadSeek + 'a>, Error> {
         match self {
-            Entry::Track(track) => Ok(Box::new(track.audio()?)),
+            Entry::Track(track) => {
+                let mut audio = Box::new(track.audio()?);
+
+                let mut id3_tag_buf = Vec::new();
+                let id3_tag = track.id3_tag()?;
+                id3_tag.write_to(&mut id3_tag_buf, id3::Version::Id3v24)?;
+                let id3_tag_cursor = Box::new(io::Cursor::new(id3_tag_buf));
+
+                let concat = ioutil::Concat::new(vec![id3_tag_cursor, audio])?;
+                Ok(Box::new(concat))
+            }
             _ => unreachable!("only tracks can be opened for reading"),
         }
     }

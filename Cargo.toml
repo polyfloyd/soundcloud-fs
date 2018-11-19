@@ -9,6 +9,7 @@ env_logger = "*"
 failure = "*"
 failure_derive = "*"
 fuse = "0.3.1"
+id3 = "*"
 libc = "*"
 log = "*"
 soundcloud = { path = "./soundcloud" }

@@ -4,6 +4,7 @@ extern crate failure;
 #[macro_use]
 extern crate failure_derive;
 extern crate fuse;
+extern crate id3;
 extern crate libc;
 #[macro_use]
 extern crate log;
@@ -11,6 +12,7 @@ extern crate soundcloud;
 extern crate time;
 
 mod filesystem;
+mod ioutil;
 mod mapping;
 
 use self::filesystem::*;

@@ -1,5 +1,5 @@
 use super::*;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Datelike, Utc};
 use reqwest::{Method, Url};
 use std::io;
 use util::http;
@@ -41,14 +41,14 @@ pub struct Track<'a> {
     //"release_month": null,
     //"release_day": null,
     pub original_format: Option<String>,
-    //"license": "all-rights-reserved",
+    pub license: String,
     pub uri: String,
     pub user: TrackUser,
     //"attachments_uri": "https://api.soundcloud.com/tracks/515639547/attachments",
     //"user_playback_count": 1,
     //"user_favorite": true,
-    //"permalink_url": "http://soundcloud.com/theviicrew/vii-radio-024-john-askew",
-    //"artwork_url": "https://i1.sndcdn.com/artworks-000422755914-93c8y9-large.jpg",
+    pub permalink_url: String,
+    pub artwork_url: Option<String>,
     //"waveform_url": "https://w1.sndcdn.com/17huh4rFYXFb_m.png",
     //"stream_url": "https://api.soundcloud.com/tracks/515639547/stream",
     //"playback_count": 0,
@@ -79,25 +79,68 @@ impl<'a> Track<'a> {
         let sc_client = self.client.unwrap();
 
         if let Some(raw_url) = self.download_url.as_ref() {
-            info!("accessing audio through the download URL");
+            trace!("accessing audio through the download URL");
             let (req_builder, _) = sc_client.request(Method::GET, Url::parse(raw_url)?)?;
             let req = req_builder.build()?;
             return Ok(http::RangeSeeker::new(&sc_client.client, req)?);
         }
 
-        info!("accessing audio through the streams API");
-        lazy_static! {
-            static ref DEFAULT_CLIENT: reqwest::Client = reqwest::Client::builder()
-                .default_headers(default_headers())
-                .build()
-                .unwrap();
-        }
+        trace!("accessing audio through the streams API");
         let raw_url = format!("https://api.soundcloud.com/i1/tracks/{}/streams", self.id);
         let streams: StreamInfo = sc_client.query(Method::GET, &raw_url)?;
-        let req = DEFAULT_CLIENT
+        let req = default_client()
             .request(Method::GET, Url::parse(&streams.http_mp3_128_url)?)
             .build()?;
-        Ok(http::RangeSeeker::new(&DEFAULT_CLIENT, req)?)
+        Ok(http::RangeSeeker::new(default_client(), req)?)
+    }
+
+    pub fn id3_tag(&self) -> Result<id3::Tag, Error> {
+        let mut tag = id3::Tag::new();
+
+        tag.set_artist(self.user.username.as_str());
+        tag.set_title(self.title.as_str());
+        tag.set_duration(self.duration as u32);
+        tag.set_year(self.created_at.date().year());
+        tag.set_text("TCOP", self.license.as_str());
+        tag.add_frame(id3::Frame::with_content(
+            "WOAF",
+            id3::Content::Link(self.permalink_url.to_string()),
+        ));
+
+        if let Some(ref genre) = self.genre {
+            tag.set_genre(genre.as_str());
+        }
+
+        if let Some(ref url) = self.artwork_url {
+            // "large.jpg" is actually a 100x100 image. We can tweak the URL to point to a larger
+            // image instead.
+            let url = if url.ends_with("-large.jpg") {
+                format!("{}-t500x500.jpg", url.trim_end_matches("-large.jpg"))
+            } else {
+                url.to_string()
+            };
+
+            info!("querying GET {}", url);
+            let mut resp = default_client().get(&url).send()?.error_for_status()?;
+
+            let mime_type = resp
+                .headers()
+                .get(header::CONTENT_TYPE)
+                .and_then(|h| h.to_str().ok())
+                .map(|h| h.to_string())
+                .unwrap_or("image/jpg".to_string());
+            let mut data = Vec::new();
+            resp.copy_to(&mut data)?;
+
+            tag.add_picture(id3::frame::Picture {
+                mime_type,
+                picture_type: id3::frame::PictureType::CoverFront,
+                description: "Artwork".to_string(),
+                data,
+            })
+        }
+
+        Ok(tag)
     }
 }
 

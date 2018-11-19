@@ -11,6 +11,7 @@ use std::os;
 
 pub use self::node::*;
 pub use self::nodecache::*;
+pub use ioutil::*;
 
 const INO_ROOT: u64 = 1;
 
