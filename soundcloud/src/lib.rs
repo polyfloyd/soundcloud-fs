@@ -8,6 +8,7 @@ extern crate chrono;
 extern crate failure;
 #[macro_use]
 extern crate failure_derive;
+extern crate id3;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
@@ -49,6 +50,16 @@ pub(crate) fn default_headers() -> header::HeaderMap {
         header::HeaderValue::from_static("https://soundcloud.com/"),
     );
     headers
+}
+
+pub(crate) fn default_client() -> &'static reqwest::Client {
+    lazy_static! {
+        static ref DEFAULT_CLIENT: reqwest::Client = reqwest::Client::builder()
+            .default_headers(default_headers())
+            .build()
+            .unwrap();
+    }
+    &DEFAULT_CLIENT
 }
 
 #[derive(Clone)]
