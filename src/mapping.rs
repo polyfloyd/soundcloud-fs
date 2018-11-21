@@ -151,7 +151,10 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
                 id3_tag.write_to(&mut id3_tag_buf, id3::Version::Id3v24)?;
                 let id3_tag_cursor = Box::new(io::Cursor::new(id3_tag_buf));
 
-                let concat = ioutil::Concat::new(vec![id3_tag_cursor, audio])?;
+                let concat = ioutil::Concat::new(vec![
+                    Box::<ioutil::ReadSeek>::from(id3_tag_cursor),
+                    Box::<ioutil::ReadSeek>::from(audio),
+                ])?;
                 Ok(Box::new(concat))
             }
             _ => unreachable!("only tracks can be opened for reading"),
