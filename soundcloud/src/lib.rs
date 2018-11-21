@@ -149,7 +149,6 @@ impl Client {
         base_url: impl AsRef<str>,
     ) -> Result<(reqwest::RequestBuilder, Url), Error> {
         let url = Url::parse_with_params(base_url.as_ref(), &[("client_id", &self.client_id)])?;
-        info!("querying {} {}", method, url);
         let req = self.client.request(method, url.clone());
         Ok((req, url))
     }
@@ -160,6 +159,7 @@ impl Client {
         base_url: impl AsRef<str>,
     ) -> Result<T, Error> {
         let (req, url) = self.request(method.clone(), base_url)?;
+        info!("querying {} {}", method, url);
         let mut buf = Vec::new();
         req.send()?.error_for_status()?.copy_to(&mut buf)?;
 
