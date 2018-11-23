@@ -151,8 +151,19 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
                 id3_tag.write_to(&mut id3_tag_buf, id3::Version::Id3v24)?;
                 let id3_tag_cursor = Box::new(io::Cursor::new(id3_tag_buf));
 
+                // Hackety hack: the file concatenation abstraction is able to lazily index the
+                // size of the underlying files. This ensures for programs that just want to probe
+                // the audio file's metadata, no request for the actual audio file will be
+                // performed.
+                // However, because reading programs may read beyond the metadata, the audio may
+                // still be accessed. To counter this, we jam a very large swath of zero bytes in
+                // between the metadata and audio stream to saturate the read buffer without the
+                // audio stream.
+                let padding = Box::new(io::Cursor::new(vec![0x00; 500_000]));
+
                 let concat = ioutil::Concat::new(vec![
                     Box::<ioutil::ReadSeek>::from(id3_tag_cursor),
+                    Box::<ioutil::ReadSeek>::from(padding),
                     Box::<ioutil::ReadSeek>::from(audio),
                 ])?;
                 Ok(Box::new(concat))

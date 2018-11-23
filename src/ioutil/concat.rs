@@ -35,6 +35,30 @@ where
     }
 }
 
+impl<T> Concat<T>
+where
+    T: io::Read + io::Seek,
+{
+    /// index_up_to ensures that there is a range in `self.ranges` that includes the specified
+    /// offset unless there are no more files to index.
+    fn index_up_to(&mut self, new_offset: u64) -> io::Result<()> {
+        loop {
+            let current_end = self.ranges.last().map(|r| r.end).unwrap_or(0);
+            if (new_offset as u64) < current_end {
+                break Ok(());
+            }
+
+            let file = match self.files.get_mut(self.ranges.len()) {
+                Some(v) => v,
+                None => break Ok(()),
+            };
+            let size = file.seek(io::SeekFrom::End(0))?;
+            let range = current_end..(current_end + size);
+            self.ranges.push(range);
+        }
+    }
+}
+
 impl<T> io::Read for Concat<T>
 where
     T: io::Read + io::Seek,
@@ -73,24 +97,34 @@ where
     T: io::Read + io::Seek,
 {
     fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
-        if self.ranges.is_empty() {
-            let mut ranges = Vec::new();
-            let mut offset = 0;
-            for mut file in &mut self.files {
-                let size = file.seek(io::SeekFrom::End(0))?;
-                let range = offset..(offset + size);
-                ranges.push(range);
-                offset += size;
-            }
-            self.ranges = ranges;
-        }
-
-        let length = self.ranges.last().unwrap().end as i64;
         let new_offset: i64 = match pos {
-            io::SeekFrom::Start(offset) => offset as i64,
-            io::SeekFrom::End(offset) => length + offset,
-            io::SeekFrom::Current(offset) => self.offset as i64 + offset,
+            io::SeekFrom::Start(offset) => {
+                self.index_up_to(offset)?;
+                offset as i64
+            }
+            io::SeekFrom::Current(offset) => {
+                let new_offset = self.offset as i64 + offset;
+                if new_offset < 0 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        format!(
+                            "ioutil::Concat: seek position {:?} resolves to {}",
+                            pos, new_offset
+                        ),
+                    ));
+                }
+                self.index_up_to(new_offset as u64)?;
+                new_offset
+            }
+            io::SeekFrom::End(offset) => {
+                // Before we can know where the end is, we have to index all files. We do this by
+                // just trying to index up the closest we can get to infinity with a 64 bit int.
+                self.index_up_to(std::u64::MAX)?;
+                let length = self.ranges.last().unwrap().end as i64;
+                length + offset
+            }
         };
+        let length = self.ranges.last().unwrap().end as i64;
 
         if new_offset < 0 || length < new_offset {
             return Err(io::Error::new(
@@ -124,6 +158,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use super::super::OpRecorder;
     use super::*;
     use std::io::{Read, Seek};
 
@@ -209,10 +244,13 @@ mod tests {
 
     #[test]
     fn seek_multiple_files_eof() {
-        let expect = vec![1, 2, 3, 4, 5, 6, 7, 8];
-        let mut concat = Concat::new(vec![io::Cursor::new(expect.clone())]).unwrap();
+        let a = vec![1, 2, 3, 4];
+        let b = vec![5, 6, 7, 8];
+        let mut concat =
+            Concat::new(vec![io::Cursor::new(a.clone()), io::Cursor::new(b.clone())]).unwrap();
 
-        concat.seek(io::SeekFrom::End(0)).unwrap();
+        let abs_pos = concat.seek(io::SeekFrom::End(0)).unwrap();
+        assert_eq!(abs_pos, 8);
 
         let mut buf = vec![0; 4];
         let nread = concat.read(&mut buf).unwrap();
@@ -274,5 +312,20 @@ mod tests {
         let nread = concat.read(&mut buf).unwrap();
         assert_eq!(nread, 2);
         assert_eq!(buf, vec![3, 4]);
+    }
+
+    #[test]
+    fn seek_lazy_ranges() {
+        let mut concat = Concat::new(vec![
+            OpRecorder::new(io::Cursor::new(vec![0; 4])),
+            OpRecorder::new(io::Cursor::new(vec![0; 4])),
+        ]).unwrap();
+
+        let mut buf = vec![0; 4];
+        concat.read(&mut buf).unwrap();
+        concat.seek(io::SeekFrom::Start(3)).unwrap();
+
+        println!("{:?}", concat.files[1].ops());
+        assert_eq!(concat.files[1].ops().len(), 0);
     }
 }
