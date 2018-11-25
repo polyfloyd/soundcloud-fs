@@ -181,10 +181,10 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
         match self {
             Entry::User(user) => {
                 let mut children = Vec::new();
-                children.push(("favorites".to_string(), Entry::UserFavorites(user.clone())));
                 if user.primary_email_confirmed.is_some() {
-                    // Only add the following directory for the logged in user to prevent recursing
-                    // too deeply.
+                    // Only add child directories for the logged in user to prevent recursing too
+                    // deeply.
+                    children.push(("favorites".to_string(), Entry::UserFavorites(user.clone())));
                     children.push(("following".to_string(), Entry::UserFollowing(user.clone())));
                 }
                 children.extend(
