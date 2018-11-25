@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use filesystem;
 use id3;
-use ioutil::{Concat, LazyOpen, ReadSeek};
+use ioutil::{self, Concat, LazyOpen, ReadSeek};
 use soundcloud;
 use std::io;
 use time;
@@ -157,7 +157,7 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
                 // still be accessed. To counter this, we jam a very large swath of zero bytes in
                 // between the metadata and audio stream to saturate the read buffer without the
                 // audio stream.
-                let padding = Box::new(io::Cursor::new(vec![0x00; 1_000_000]));
+                let padding = Box::new(ioutil::zeros(1_000_000));
 
                 let track_cp = track.clone();
                 let audio = Box::new(LazyOpen::new(move || {
