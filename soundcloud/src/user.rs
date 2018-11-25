@@ -82,8 +82,18 @@ impl<'a> User<'a> {
     }
 
     pub fn tracks(&self) -> Result<Vec<Track<'a>>, Error> {
-        let url = format!("https://api.soundcloud.com/users/{}/tracks", self.id);
-        let mut tracks: Vec<Track> = self.client.unwrap().query(Method::GET, url)?;
+        let mut tracks = Vec::new();
+
+        let mut next_url = Some(format!(
+            "https://api.soundcloud.com/users/{}/tracks?linked_partitioning=1&limit=200",
+            self.id
+        ));
+        while let Some(url) = next_url.take() {
+            let page: Page<Track> = self.client.unwrap().query(Method::GET, url)?;
+            tracks.extend(page.collection);
+            next_url = page.next_href;
+        }
+
         for track in &mut tracks {
             track.client = self.client;
         }
@@ -91,8 +101,18 @@ impl<'a> User<'a> {
     }
 
     pub fn favorites(&self) -> Result<Vec<Track<'a>>, Error> {
-        let url = format!("https://api.soundcloud.com/users/{}/favorites", self.id);
-        let mut tracks: Vec<Track> = self.client.unwrap().query(Method::GET, url)?;
+        let mut tracks = Vec::new();
+
+        let mut next_url = Some(format!(
+            "https://api.soundcloud.com/users/{}/favorites?linked_partitioning=1&limit=200",
+            self.id
+        ));
+        while let Some(url) = next_url.take() {
+            let page: Page<Track> = self.client.unwrap().query(Method::GET, url)?;
+            tracks.extend(page.collection);
+            next_url = page.next_href;
+        }
+
         for track in &mut tracks {
             track.client = self.client;
         }
@@ -100,13 +120,21 @@ impl<'a> User<'a> {
     }
 
     pub fn following(&self) -> Result<Vec<User<'a>>, Error> {
-        let url = format!("https://api.soundcloud.com/users/{}/followings", self.id);
-        let page: Page<User> = self.client.unwrap().query(Method::GET, url)?;
-        let mut users = page.collection;
+        let mut users = Vec::new();
+
+        let mut next_url = Some(format!(
+            "https://api.soundcloud.com/users/{}/followings?linked_partitioning=1",
+            self.id
+        ));
+        while let Some(url) = next_url.take() {
+            let page: Page<User> = self.client.unwrap().query(Method::GET, url)?;
+            users.extend(page.collection);
+            next_url = page.next_href;
+        }
+
         for user in &mut users {
             user.client = self.client;
         }
-        let _ = page.next_href; // TODO: Load next pages?
         Ok(users)
     }
 }
