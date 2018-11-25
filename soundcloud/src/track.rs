@@ -1,17 +1,19 @@
 use super::*;
 use chrono::{DateTime, Datelike, Utc};
 use reqwest::{Method, Url};
+use serde::{Deserialize, Deserializer};
 use std::io;
 use util::http;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Track<'a> {
     pub id: i64,
     #[serde(with = "date_format")]
     pub created_at: DateTime<Utc>,
     pub user_id: i64,
-    // Duration in milliseconds
-    pub duration: i64,
+    #[serde(rename = "duration")]
+    pub duration_ms: i64,
+    #[serde(deserialize_with = "null_as_false")]
     pub commentable: bool,
     pub state: String,
     pub original_content_size: u64,
@@ -20,26 +22,29 @@ pub struct Track<'a> {
     pub sharing: String,
     pub tag_list: String,
     pub permalink: String,
+    #[serde(deserialize_with = "null_as_false")]
     pub streamable: bool,
     pub embeddable_by: String,
+    #[serde(deserialize_with = "null_as_false")]
     pub downloadable: bool,
     pub purchase_url: Option<String>,
     pub download_url: Option<String>,
     //"label_id": null,
     //"purchase_title": null,
+    #[serde(deserialize_with = "empty_str_as_none")]
     pub genre: Option<String>,
     pub title: String,
     pub description: Option<String>,
-    //"label_name": null,
-    //"release": null,
-    //"track_type": null,
-    //"key_signature": null,
-    //"isrc": null,
-    //"video_url": null,
-    //"bpm": null,
-    //"release_year": null,
-    //"release_month": null,
-    //"release_day": null,
+    pub label_name: Option<String>,
+    pub release: Option<String>,
+    pub track_type: Option<String>,
+    pub key_signature: Option<String>,
+    pub isrc: Option<String>,
+    pub video_url: Option<String>,
+    pub bpm: Option<i32>,
+    pub release_year: Option<i32>,
+    pub release_month: Option<i32>,
+    pub release_day: Option<i32>,
     pub original_format: Option<String>,
     pub license: String,
     pub uri: String,
@@ -99,16 +104,34 @@ impl<'a> Track<'a> {
 
         tag.set_artist(self.user.username.as_str());
         tag.set_title(self.title.as_str());
-        tag.set_duration(self.duration as u32);
-        tag.set_year(self.created_at.date().year());
+        tag.set_duration(self.duration_ms as u32);
         tag.set_text("TCOP", self.license.as_str());
         tag.add_frame(id3::Frame::with_content(
             "WOAF",
             id3::Content::Link(self.permalink_url.to_string()),
         ));
-
+        tag.add_frame(id3::Frame::with_content(
+            "WOAR",
+            id3::Content::Link(self.user.permalink_url.to_string()),
+        ));
+        tag.set_year(
+            self.release_year
+                .unwrap_or_else(|| self.created_at.date().year()),
+        );
+        if let Some(year) = self.release_year {
+            tag.set_text("TORY", format!("{}", year));
+        }
         if let Some(ref genre) = self.genre {
             tag.set_genre(genre.as_str());
+        }
+        if let Some(bpm) = self.bpm {
+            tag.set_text("TBPM", format!("{}", bpm));
+        }
+        if let Some(label) = self.label_name.as_ref().filter(|s| !s.is_empty()) {
+            tag.set_text("TPUB", label.as_str());
+        }
+        if let Some(isrc) = self.isrc.as_ref().filter(|s| !s.is_empty()) {
+            tag.set_text("TSRC", isrc.as_str());
         }
 
         if let Some(ref url) = self.artwork_url {
@@ -128,7 +151,7 @@ impl<'a> Track<'a> {
                 .get(header::CONTENT_TYPE)
                 .and_then(|h| h.to_str().ok())
                 .map(|h| h.to_string())
-                .unwrap_or("image/jpg".to_string());
+                .unwrap_or_else(|| "image/jpg".to_string());
             let mut data = Vec::new();
             resp.copy_to(&mut data)?;
 
@@ -161,4 +184,14 @@ pub struct TrackUser {
     uri: String,
     permalink_url: String,
     avatar_url: String,
+}
+
+fn empty_str_as_none<'de, D: Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
+    let o: Option<String> = Option::deserialize(d)?;
+    Ok(o.filter(|s| !s.is_empty()))
+}
+
+fn null_as_false<'de, D: Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+    let o: Option<bool> = Option::deserialize(d)?;
+    Ok(o.unwrap_or(false))
 }
