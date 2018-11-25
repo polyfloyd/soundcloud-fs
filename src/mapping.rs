@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use filesystem;
 use id3;
-use ioutil;
+use ioutil::{Concat, LazyOpen, ReadSeek};
 use soundcloud;
 use std::io;
 use time;
@@ -141,11 +141,9 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
         }
     }
 
-    fn open_ro(&self) -> Result<Box<ioutil::ReadSeek + 'a>, Error> {
+    fn open_ro(&self) -> Result<Box<ReadSeek + 'a>, Error> {
         match self {
             Entry::Track(track) => {
-                let mut audio = Box::new(track.audio()?);
-
                 let mut id3_tag_buf = Vec::new();
                 let id3_tag = track.id3_tag()?;
                 id3_tag.write_to(&mut id3_tag_buf, id3::Version::Id3v24)?;
@@ -159,12 +157,19 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
                 // still be accessed. To counter this, we jam a very large swath of zero bytes in
                 // between the metadata and audio stream to saturate the read buffer without the
                 // audio stream.
-                let padding = Box::new(io::Cursor::new(vec![0x00; 500_000]));
+                let padding = Box::new(io::Cursor::new(vec![0x00; 1_000_000]));
 
-                let concat = ioutil::Concat::new(vec![
-                    Box::<ioutil::ReadSeek>::from(id3_tag_cursor),
-                    Box::<ioutil::ReadSeek>::from(padding),
-                    Box::<ioutil::ReadSeek>::from(audio),
+                let track_cp = track.clone();
+                let audio = Box::new(LazyOpen::new(move || {
+                    track_cp
+                        .audio()
+                        .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{}", err)))
+                }));
+
+                let concat = Concat::new(vec![
+                    Box::<ReadSeek>::from(id3_tag_cursor),
+                    Box::<ReadSeek>::from(padding),
+                    Box::<ReadSeek>::from(audio),
                 ])?;
                 Ok(Box::new(concat))
             }
