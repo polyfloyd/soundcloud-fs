@@ -5,6 +5,7 @@ authors = ["polyfloyd <floyd@polyfloyd.net>"]
 
 [dependencies]
 chrono = "*"
+clap = "2.32.0"
 env_logger = "*"
 failure = "*"
 failure_derive = "*"
