@@ -24,18 +24,26 @@ use std::process;
 fn main() {
     env_logger::init();
 
-    let client_cache_path = "/tmp/sc-test-token";
     let username = env::var("SC_USERNAME").unwrap();
-    let password = env::var("SC_PASSWORD").unwrap();
+    let password = env::var("SC_PASSWORD").ok();
+    let client_cache_path = "/tmp/sc-test-token";
 
-    let sc_client_rs = soundcloud::Client::from_cache(client_cache_path)
-        .map(|v| {
-            info!("loaded client from cache");
-            v
-        }).or_else(|err| {
-            info!("{}", err);
-            soundcloud::Client::login(username, password)
-        });
+    let sc_client_rs = match password {
+        None => {
+            info!("creating anonymous client");
+            soundcloud::Client::anonymous()
+        }
+        Some(pw) => soundcloud::Client::from_cache(client_cache_path)
+            .map(|v| {
+                info!("loaded client from cache");
+                v
+            }).or_else(|err| {
+                error!("{}", err);
+                info!("logging in as {}", username);
+                soundcloud::Client::login(&username, pw)
+            }),
+    };
+
     let sc_client = match sc_client_rs {
         Ok(v) => v,
         Err(err) => {
@@ -50,9 +58,11 @@ fn main() {
         );
     }
 
-    let myself = soundcloud::User::me(&sc_client).unwrap();
-
-    let fs = FS::new(NodeCache::new(Entry::User(myself)));
+    let user = soundcloud::User::by_name(&sc_client, &username).unwrap();
+    let fs = FS::new(NodeCache::new(Entry::User {
+        user,
+        recurse: true,
+    }));
     let path = Path::new("/home/polyfloyd/sc-test");
     fuse::mount(fs, &path, &[]).unwrap();
 }

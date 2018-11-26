@@ -13,17 +13,19 @@ extern crate id3;
 extern crate lazy_static;
 #[macro_use]
 extern crate log;
+extern crate regex;
 extern crate reqwest;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
 
+use regex::bytes::Regex;
 use reqwest::{header, Url};
 use serde::de::DeserializeOwned;
 use std::fmt;
 use std::fs;
-use std::io::{self, Write};
+use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::str;
@@ -33,7 +35,6 @@ pub use self::track::Track;
 pub use self::user::User;
 
 const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64; rv:63.0) Gecko/20100101 Firefox/63.0";
-const CLIENT_ID: &str = "Ine5MMVzbMYXUSWyEkyHNWzC7p8wKpzb";
 
 pub(crate) fn default_headers() -> header::HeaderMap {
     let mut headers = header::HeaderMap::new();
@@ -66,7 +67,7 @@ pub(crate) fn default_client() -> &'static reqwest::Client {
 pub struct Client {
     client: reqwest::Client,
     client_id: String,
-    token: String,
+    token: Option<String>,
 }
 
 impl Client {
@@ -75,13 +76,12 @@ impl Client {
     ///
     /// This login method is not guaranteed to be stable!
     pub fn login(username: impl AsRef<str>, password: impl AsRef<str>) -> Result<Client, Error> {
-        let client = reqwest::Client::builder()
-            .default_headers(default_headers())
-            .build()?;
+        let client = default_client();
+        let client_id = anonymous_client_id(&client)?;
 
         trace!("performing password login with user: {}", username.as_ref());
         let login_req_body = PasswordLoginReqBody {
-            client_id: CLIENT_ID,
+            client_id: &client_id,
             scope: "fast-connect non-expiring purchase signup upload",
             recaptcha_pubkey: "6LeAxT8UAAAAAOLTfaWhndPCjGOnB54U1GEACb7N",
             recaptcha_response: None,
@@ -95,7 +95,7 @@ impl Client {
         };
         let login_url = Url::parse_with_params(
             "https://api-v2.soundcloud.com/sign-in/password?app_version=1541509103&app_locale=en",
-            &[("client_id", CLIENT_ID)],
+            &[("client_id", &client_id)],
         ).unwrap();
         trace!("password login URL: {}", login_url);
         let login_res_body: PasswordLoginResBody = client
@@ -110,6 +110,17 @@ impl Client {
         Client::from_token(token)
     }
 
+    // Attempt to create a client with read-only access to the public API.
+    pub fn anonymous() -> Result<Client, Error> {
+        let client = default_client();
+        let client_id = anonymous_client_id(&client)?;
+        Ok(Client {
+            client: client.clone(),
+            client_id,
+            token: None,
+        })
+    }
+
     pub fn from_token(token: impl Into<String>) -> Result<Client, Error> {
         let token = token.into();
         let auth_client = reqwest::Client::builder()
@@ -119,10 +130,11 @@ impl Client {
                 headers.insert(header::AUTHORIZATION, auth_header);
                 headers
             }).build()?;
+        let client_id = anonymous_client_id(&auth_client)?;
         Ok(Client {
             client: auth_client,
-            client_id: CLIENT_ID.to_string(),
-            token,
+            client_id,
+            token: Some(token),
         })
     }
 
@@ -133,13 +145,14 @@ impl Client {
         Client::from_token(token)
     }
 
-    pub fn cache_to(&self, filename: impl AsRef<Path>) -> io::Result<()> {
+    pub fn cache_to(&self, filename: impl AsRef<Path>) -> Result<(), Error> {
+        let token = self.token.as_ref().ok_or(Error::NoToken)?;
         let mut f = fs::OpenOptions::new()
             .mode(0o600)
             .write(true)
             .create(true)
             .open(filename)?;
-        f.write_all(self.token.as_bytes())?;
+        f.write_all(token.as_bytes())?;
         Ok(())
     }
 
@@ -182,15 +195,34 @@ impl Client {
 
 impl fmt::Debug for Client {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "Client {{ id: {}, token: {}**** }}",
-            self.client_id,
-            &self.token[0..4]
-        )
+        let token = self
+            .token
+            .as_ref()
+            .filter(|t| t.len() >= 4)
+            .map(|t| format!("{}****", &t[0..4]))
+            .unwrap_or("<unset>".to_string());
+        write!(f, "Client {{ id: {}, token: {} }}", self.client_id, token)
     }
 }
 
+fn anonymous_client_id(client: &reqwest::Client) -> Result<String, Error> {
+    lazy_static! {
+        static ref RE_CLIENT_ID: Regex = Regex::new("client_id:\"(.+?)\"").unwrap();
+    }
+
+    let url = "https://a-v2.sndcdn.com/assets/app-f06013d-ccf988a-3.js";
+    info!("querying GET {}", url);
+    let mut main_page_resp = client.get(url).send()?.error_for_status()?;
+    let mut buf = Vec::new();
+    main_page_resp.copy_to(&mut buf)?;
+    RE_CLIENT_ID
+        .captures(&buf[..])
+        .and_then(|cap| cap.get(1))
+        .map(|mat| String::from_utf8_lossy(mat.as_bytes()).to_string())
+        .ok_or(Error::Login)
+}
+
+// Objects used for password login.
 #[derive(Serialize, Deserialize)]
 struct PasswordLoginReqBody<'a> {
     client_id: &'a str,
@@ -224,41 +256,3 @@ struct Page<T> {
     collection: Vec<T>,
     next_href: Option<String>,
 }
-
-// Common API headers
-//
-// GET /me/play-history/tracks?client_id=Ine5MMVzbMYXUSWyEkyHNWzC7p8wKpzb&limit=25&offset=0&linked_partitioning=1&app_version=1541509103&app_locale=en HTTP/1.1
-// Host: api-v2.soundcloud.com
-// User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:63.0) Gecko/20100101 Firefox/63.0
-// Accept: application/json, text/javascript, */*; q=0.01
-// Accept-Language: en-US,en;q=0.5
-// Accept-Encoding: gzip, deflate, br
-// Referer: https://soundcloud.com/
-// Authorization: OAuth 2-283605-41912219-YwFGFMHKimIMpY7
-// Origin: https://soundcloud.com
-// DNT: 1
-// Connection: keep-alive
-// Cache-Control: max-age=0
-
-// Login procedure
-//
-//POST https://api-v2.soundcloud.com/sign-in/password?client_id=Ine5MMVzbMYXUSWyEkyHNWzC7p8wKpzb&app_version=1541509103&app_locale=en
-//{
-//  "client_id":"Ine5MMVzbMYXUSWyEkyHNWzC7p8wKpzb",
-//  "scope":"fast-connect non-expiring purchase signup upload",
-//  "recaptcha_pubkey":"6LeAxT8UAAAAAOLTfaWhndPCjGOnB54U1GEACb7N",
-//  "recaptcha_response":null,
-//  "credentials":{
-//    "identifier":"USERNAME",
-//    "password":"PASSWORD"
-//  },
-//  "signature":"8:3-1-28405-134-1638720-1024-0-0:4ab691:2",
-//  "device_id":"381629-667600-267798-887023",
-//  "user_agent":"Mozilla/5.0 (X11; Linux x86_64; rv:63.0) Gecko/20100101 Firefox/63.0"
-//}
-//
-//{
-// "session":{
-//   "access_token":"TOKEN"
-//  }
-//}

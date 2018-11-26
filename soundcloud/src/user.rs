@@ -62,10 +62,10 @@ pub struct User<'a> {
 }
 
 impl<'a> User<'a> {
-    pub fn by_id(client: &Client, id: i64) -> Result<User, Error> {
+    pub fn by_name(client: &Client, name: impl AsRef<str>) -> Result<User, Error> {
         let mut rs: Result<User, _> = client.query(
             Method::GET,
-            format!("https://api.soundcloud.com/users/{}", id),
+            format!("https://api.soundcloud.com/users/{}", name.as_ref()),
         );
         if let Ok(ref mut u) = rs {
             u.client = Some(client);

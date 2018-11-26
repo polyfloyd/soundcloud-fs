@@ -50,7 +50,12 @@ impl From<id3::Error> for Error {
 
 #[derive(Clone, Debug)]
 pub enum Entry<'a> {
-    User(soundcloud::User<'a>),
+    User {
+        user: soundcloud::User<'a>,
+        // Only add child directories for users marked for recursing, to prevent recursing too
+        // deeply.
+        recurse: bool,
+    },
     UserFavorites(soundcloud::User<'a>),
     UserFollowing(soundcloud::User<'a>),
     Track(soundcloud::Track<'a>),
@@ -61,7 +66,7 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
 
     fn file_attributes(&self, ino: u64) -> fuse::FileAttr {
         match self {
-            Entry::User(user) => {
+            Entry::User { user, .. } => {
                 let mtime = timespec_from_datetime(&user.last_modified);
                 fuse::FileAttr {
                     ino,
@@ -179,11 +184,9 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
 
     fn children(&self) -> Result<Vec<(String, Entry<'a>)>, Error> {
         match self {
-            Entry::User(user) => {
+            Entry::User { user, recurse } => {
                 let mut children = Vec::new();
-                if user.primary_email_confirmed.is_some() {
-                    // Only add child directories for the logged in user to prevent recursing too
-                    // deeply.
+                if *recurse {
                     children.push(("favorites".to_string(), Entry::UserFavorites(user.clone())));
                     children.push(("following".to_string(), Entry::UserFollowing(user.clone())));
                 }
@@ -206,8 +209,15 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
                 let children: Vec<_> = user
                     .following()?
                     .into_iter()
-                    .map(|user| (user.permalink.clone(), Entry::User(user)))
-                    .collect();
+                    .map(|user| {
+                        (
+                            user.permalink.clone(),
+                            Entry::User {
+                                user,
+                                recurse: false,
+                            },
+                        )
+                    }).collect();
                 Ok(children)
             }
             Entry::Track(_) => unreachable!("tracks do not have child files"),

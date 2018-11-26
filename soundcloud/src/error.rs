@@ -1,16 +1,23 @@
 use reqwest;
 use std::error;
+use std::io;
 
 #[derive(Debug, Fail)]
 pub enum Error {
     #[fail(display = "login failed")]
     Login,
 
+    #[fail(display = "client has no token")]
+    NoToken,
+
     #[fail(display = "audio not accessible")]
     AudioNotAccessible,
 
     #[fail(display = "could not load client form cache: {}", _0)]
     FromCache(Box<error::Error + Send + Sync>),
+
+    #[fail(display = "IO error: {}", _0)]
+    IOError(io::Error),
 
     #[fail(display = "Reqwest error: {}", _0)]
     ReqwestError(reqwest::Error),
@@ -31,6 +38,12 @@ pub enum Error {
         body: String,
         error: Box<error::Error + Send + Sync>,
     },
+}
+
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Error {
+        Error::IOError(err)
+    }
 }
 
 impl From<reqwest::Error> for Error {
