@@ -10,6 +10,9 @@ const BLOCK_SIZE: u64 = 1024;
 
 #[derive(Debug, Fail)]
 pub enum Error {
+    #[fail(display = "child not found")]
+    ChildNotFound,
+
     #[fail(display = "soundcloud error: {}", _0)]
     SoundCloudError(soundcloud::Error),
 
@@ -21,8 +24,13 @@ pub enum Error {
 }
 
 impl filesystem::Error for Error {
+    fn not_found() -> Self {
+        Error::ChildNotFound
+    }
+
     fn errno(&self) -> i32 {
         match self {
+            Error::ChildNotFound => libc::ENOENT,
             Error::SoundCloudError(_) => libc::EIO,
             Error::IOError(err) => err.raw_os_error().unwrap_or(libc::EIO),
             Error::ID3Error(_) => libc::EIO,
@@ -50,6 +58,10 @@ impl From<id3::Error> for Error {
 
 #[derive(Clone, Debug)]
 pub enum Entry<'a> {
+    Users {
+        sc_client: &'a soundcloud::Client,
+        show: Vec<String>,
+    },
     User {
         user: soundcloud::User<'a>,
         // Only add child directories for users marked for recursing, to prevent recursing too
@@ -66,6 +78,25 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
 
     fn file_attributes(&self, ino: u64) -> fuse::FileAttr {
         match self {
+            Entry::Users { .. } => {
+                let mtime = timespec_from_datetime(&Utc::now());
+                fuse::FileAttr {
+                    ino,
+                    size: 0,
+                    blocks: 1,
+                    atime: mtime,
+                    mtime,
+                    ctime: mtime,
+                    crtime: mtime,
+                    kind: fuse::FileType::Directory,
+                    perm: 0o555,
+                    nlink: 1,
+                    uid: 0,
+                    gid: 0,
+                    rdev: 1,
+                    flags: 0,
+                }
+            }
             Entry::User { user, .. } => {
                 let mtime = timespec_from_datetime(&user.last_modified);
                 fuse::FileAttr {
@@ -184,6 +215,15 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
 
     fn children(&self) -> Result<Vec<(String, Entry<'a>)>, Error> {
         match self {
+            Entry::Users { sc_client, show } => show
+                .iter()
+                .map(|name| {
+                    let entry = Entry::User {
+                        user: soundcloud::User::by_name(&sc_client, name)?,
+                        recurse: true,
+                    };
+                    Ok((name.clone(), entry))
+                }).collect(),
             Entry::User { user, recurse } => {
                 let mut children = Vec::new();
                 if *recurse {
@@ -221,6 +261,33 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
                 Ok(children)
             }
             Entry::Track(_) => unreachable!("tracks do not have child files"),
+        }
+    }
+
+    fn child_by_name(&self, name: &str) -> Result<Entry<'a>, Error> {
+        match self {
+            Entry::Users { sc_client, show } => {
+                match name {
+                    "autorun.inf" | "BDMV" => {
+                        return Err(Error::ChildNotFound);
+                    }
+                    name if name.starts_with(".") => {
+                        return Err(Error::ChildNotFound);
+                    }
+                    _ => (),
+                }
+                let entry = Entry::User {
+                    user: soundcloud::User::by_name(&sc_client, name)?,
+                    recurse: show.iter().any(|n| n == name),
+                };
+                Ok(entry)
+            }
+            _ => self
+                .children()?
+                .into_iter()
+                .find(|(n, _)| n == &name)
+                .map(|(_, entry)| entry)
+                .ok_or(Error::ChildNotFound),
         }
     }
 }

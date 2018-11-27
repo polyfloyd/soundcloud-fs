@@ -85,10 +85,9 @@ fn main() {
     };
 
     let username = cli.value_of("user").unwrap();
-    let user = soundcloud::User::by_name(&sc_client, &username).unwrap();
-    let fs = FS::new(NodeCache::new(Entry::User {
-        user,
-        recurse: true,
+    let fs = FS::new(NodeCache::new(Entry::Users {
+        sc_client: &sc_client,
+        show: vec![username.to_string()],
     }));
     let path = cli.value_of("path").unwrap();
     fuse::mount(fs, &path, &[]).unwrap();

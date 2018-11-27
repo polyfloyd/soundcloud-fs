@@ -77,28 +77,22 @@ where
                     return;
                 }
             };
-            let children = match parent.children() {
+            match parent.child_by_name(&name) {
                 Ok(v) => v,
                 Err(err) => {
-                    error!("fuse: could not get child {}: {}", name, err);
+                    if err.errno() != libc::ENOENT {
+                        error!("fuse: could not get child {}: {}", name, err);
+                    }
                     reply.error(err.errno());
                     return;
                 }
-            };
-            children
-                .into_iter()
-                .find(|(n, _)| n == &name)
-                .map(|(_, entry)| entry)
+            }
         };
-        if let Some(child) = child {
-            let child_ino = inode_for_child(parent_ino, &name);
-            let attrs = child.file_attributes(child_ino);
-            self.nodes.insert(child_ino, child);
-            let now = time::now().to_timespec();
-            reply.entry(&now, &attrs, 0);
-        } else {
-            reply.error(libc::ENOENT);
-        }
+        let child_ino = inode_for_child(parent_ino, &name);
+        let attrs = child.file_attributes(child_ino);
+        self.nodes.insert(child_ino, child);
+        let now = time::now().to_timespec();
+        reply.entry(&now, &attrs, 0);
     }
 
     fn getattr(&mut self, _req: &fuse::Request, ino: u64, reply: fuse::ReplyAttr) {

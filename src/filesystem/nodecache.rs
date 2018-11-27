@@ -1,6 +1,7 @@
 use super::*;
 use ioutil::*;
 use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone)]
 pub struct NodeCache<'a, T>
@@ -9,6 +10,8 @@ where
 {
     inner: T,
     cached_children: RefCell<Option<Vec<(String, NodeCache<'a, T>)>>>,
+    hidden_cached_children: RefCell<HashMap<String, NodeCache<'a, T>>>,
+    non_children: RefCell<HashSet<String>>,
 }
 
 impl<'a, T> NodeCache<'a, T>
@@ -19,6 +22,8 @@ where
         NodeCache {
             inner,
             cached_children: RefCell::new(None),
+            hidden_cached_children: RefCell::new(HashMap::new()),
+            non_children: RefCell::new(HashSet::new()),
         }
     }
 }
@@ -50,5 +55,44 @@ where
             .collect();
         *cached = Some(children.clone());
         Ok(children)
+    }
+
+    fn child_by_name(&self, name: &str) -> Result<Self, Self::Error> {
+        if self.non_children.borrow().contains(name) {
+            return Err(Self::Error::not_found());
+        }
+
+        if let Some(child) = self.hidden_cached_children.borrow().get(name) {
+            return Ok(child.clone());
+        }
+
+        let cached = self.cached_children.borrow_mut();
+        if cached.is_some() {
+            let maybe_child = cached
+                .as_ref()
+                .unwrap()
+                .iter()
+                .find(|(n, _)| n == &name)
+                .map(|(_, entry)| entry);
+            if let Some(child) = maybe_child {
+                return Ok(child.clone());
+            }
+        }
+
+        match self.inner.child_by_name(name) {
+            Ok(v) => {
+                let child = NodeCache::new(v);
+                self.hidden_cached_children
+                    .borrow_mut()
+                    .insert(name.to_string(), child.clone());
+                Ok(child)
+            }
+            Err(err) => {
+                if err.errno() == libc::ENOENT {
+                    self.non_children.borrow_mut().insert(name.to_string());
+                }
+                Err(err)
+            }
+        }
     }
 }

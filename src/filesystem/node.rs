@@ -3,6 +3,7 @@ use failure::Fail;
 use ioutil::*;
 
 pub trait Error: Fail {
+    fn not_found() -> Self;
     fn errno(&self) -> i32;
 }
 
@@ -14,4 +15,6 @@ pub trait Node<'a>: Sized {
     fn open_ro(&self) -> Result<Box<ReadSeek + 'a>, Self::Error>;
 
     fn children(&self) -> Result<Vec<(String, Self)>, Self::Error>;
+
+    fn child_by_name(&self, name: &str) -> Result<Self, Self::Error>;
 }
