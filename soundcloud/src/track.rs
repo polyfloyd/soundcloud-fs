@@ -134,7 +134,8 @@ impl<'a> Track<'a> {
             tag.set_text("TSRC", isrc.as_str());
         }
 
-        if let Some(ref url) = self.artwork_url {
+        let enable_image = self.client.as_ref().unwrap().config.id3_download_images;
+        if let Some(ref url) = self.artwork_url.as_ref().filter(|_| enable_image) {
             // "large.jpg" is actually a 100x100 image. We can tweak the URL to point to a larger
             // image instead.
             let url = if url.ends_with("-large.jpg") {

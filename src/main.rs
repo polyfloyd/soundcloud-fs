@@ -50,22 +50,29 @@ fn main() {
                     2 => Ok(()),
                     c => Err(format!("bad credential format, split on : yields {} strings", c)),
                 }).help("Logs in using a username and password instead of accessing the API anonymously"),
+        ).arg(
+            clap::Arg::with_name("id3-images")
+                .long("id3-images")
+                .help("Enables image metadata in ID3 tags. This will incur an additional HTTP request everytime a file is opened for reading"),
         ).get_matches();
+
+    let sc_config = soundcloud::Config {
+        id3_download_images: cli.is_present("id3-images"),
+    };
 
     let login = cli.value_of("login").and_then(|s| {
         let mut i = s.splitn(2, ":");
         let u = i.next().unwrap();
         i.next().map(|p| (u, p))
     });
-
     let sc_client_rs = match login {
         None => {
             info!("creating anonymous client");
-            soundcloud::Client::anonymous()
+            soundcloud::Client::anonymous(sc_config)
         }
         Some((username, password)) => {
             info!("logging in as {}", username);
-            soundcloud::Client::login(&username, password)
+            soundcloud::Client::login(sc_config, &username, password)
         }
     };
 
