@@ -24,10 +24,6 @@ use regex::bytes::Regex;
 use reqwest::{header, Url};
 use serde::de::DeserializeOwned;
 use std::fmt;
-use std::fs;
-use std::io::Write;
-use std::os::unix::fs::OpenOptionsExt;
-use std::path::Path;
 use std::str;
 
 pub use self::error::Error;
@@ -136,24 +132,6 @@ impl Client {
             client_id,
             token: Some(token),
         })
-    }
-
-    pub fn from_cache(filename: impl AsRef<Path>) -> Result<Client, Error> {
-        let raw_token = fs::read(filename).map_err(|err| Error::FromCache(Box::new(err)))?;
-        let token =
-            str::from_utf8(&raw_token[..]).map_err(|err| Error::FromCache(Box::new(err)))?;
-        Client::from_token(token)
-    }
-
-    pub fn cache_to(&self, filename: impl AsRef<Path>) -> Result<(), Error> {
-        let token = self.token.as_ref().ok_or(Error::NoToken)?;
-        let mut f = fs::OpenOptions::new()
-            .mode(0o600)
-            .write(true)
-            .create(true)
-            .open(filename)?;
-        f.write_all(token.as_bytes())?;
-        Ok(())
     }
 
     pub(crate) fn request(

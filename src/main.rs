@@ -58,22 +58,15 @@ fn main() {
         i.next().map(|p| (u, p))
     });
 
-    let client_cache_path = "/tmp/sc-test-token";
-
     let sc_client_rs = match login {
         None => {
             info!("creating anonymous client");
             soundcloud::Client::anonymous()
         }
-        Some((username, password)) => soundcloud::Client::from_cache(client_cache_path)
-            .map(|v| {
-                info!("loaded client from cache");
-                v
-            }).or_else(|err| {
-                error!("{}", err);
-                info!("logging in as {}", username);
-                soundcloud::Client::login(&username, password)
-            }),
+        Some((username, password)) => {
+            info!("logging in as {}", username);
+            soundcloud::Client::login(&username, password)
+        }
     };
 
     let sc_client = match sc_client_rs {
@@ -82,15 +75,6 @@ fn main() {
             error!("could not initialize SoundCloud client: {}", err);
             process::exit(1);
         }
-    };
-
-    match sc_client.cache_to(client_cache_path) {
-        Ok(_) => (),
-        Err(soundcloud::Error::NoToken) => (),
-        Err(err) => error!(
-            "could not cache SoundCloud client to {}: {}",
-            client_cache_path, err
-        ),
     };
 
     let username = cli.value_of("user").unwrap();
