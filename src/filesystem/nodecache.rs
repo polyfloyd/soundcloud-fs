@@ -2,6 +2,7 @@ use super::*;
 use ioutil::*;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub struct NodeCache<'a, T>
@@ -94,5 +95,9 @@ where
                 Err(err)
             }
         }
+    }
+
+    fn read_link(&self) -> Result<PathBuf, Self::Error> {
+        self.inner.read_link()
     }
 }

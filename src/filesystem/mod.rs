@@ -8,6 +8,7 @@ use std::ffi;
 use std::hash::{Hash, Hasher};
 use std::io;
 use std::os;
+use std::os::unix::ffi::OsStrExt;
 
 pub use self::node::*;
 pub use self::nodecache::*;
@@ -107,8 +108,23 @@ where
         }
     }
 
-    fn readlink(&mut self, _req: &fuse::Request, _ino: u64, _reply: fuse::ReplyData) {
-        unimplemented!();
+    fn readlink(&mut self, _req: &fuse::Request, ino: u64, reply: fuse::ReplyData) {
+        trace!("fuse readlink: ino={}", ino);
+        if let Some(entry) = self.nodes.get(&ino) {
+            let path = match entry.read_link() {
+                Ok(v) => v,
+                Err(err) => {
+                    if err.errno() != libc::ENOENT {
+                        error!("fuse: could not read symlink: {}", err);
+                    }
+                    reply.error(err.errno());
+                    return;
+                }
+            };
+            reply.data(path.as_os_str().as_bytes());
+        } else {
+            reply.error(libc::ENOENT);
+        }
     }
 
     fn open(&mut self, _req: &fuse::Request, ino: u64, flags: u32, reply: fuse::ReplyOpen) {

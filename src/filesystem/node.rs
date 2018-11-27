@@ -1,6 +1,7 @@
 use super::*;
 use failure::Fail;
 use ioutil::*;
+use std::path::PathBuf;
 
 pub trait Error: Fail {
     fn not_found() -> Self;
@@ -17,4 +18,6 @@ pub trait Node<'a>: Sized {
     fn children(&self) -> Result<Vec<(String, Self)>, Self::Error>;
 
     fn child_by_name(&self, name: &str) -> Result<Self, Self::Error>;
+
+    fn read_link(&self) -> Result<PathBuf, Self::Error>;
 }

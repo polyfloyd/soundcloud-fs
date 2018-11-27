@@ -4,6 +4,7 @@ use id3;
 use ioutil::{self, Concat, LazyOpen, ReadSeek};
 use soundcloud;
 use std::io;
+use std::path::PathBuf;
 use time;
 
 const BLOCK_SIZE: u64 = 1024;
@@ -70,6 +71,7 @@ pub enum Entry<'a> {
     },
     UserFavorites(soundcloud::User<'a>),
     UserFollowing(soundcloud::User<'a>),
+    UserReference(soundcloud::User<'a>),
     Track(soundcloud::Track<'a>),
 }
 
@@ -146,6 +148,25 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
                     ctime: mtime,
                     crtime: mtime,
                     kind: fuse::FileType::Directory,
+                    perm: 0o555,
+                    nlink: 1,
+                    uid: 0,
+                    gid: 0,
+                    rdev: 1,
+                    flags: 0,
+                }
+            }
+            Entry::UserReference(user) => {
+                let mtime = timespec_from_datetime(&user.last_modified);
+                fuse::FileAttr {
+                    ino,
+                    size: 0,
+                    blocks: 1,
+                    atime: mtime,
+                    mtime,
+                    ctime: mtime,
+                    crtime: mtime,
+                    kind: fuse::FileType::Symlink,
                     perm: 0o555,
                     nlink: 1,
                     uid: 0,
@@ -249,17 +270,11 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
                 let children: Vec<_> = user
                     .following()?
                     .into_iter()
-                    .map(|user| {
-                        (
-                            user.permalink.clone(),
-                            Entry::User {
-                                user,
-                                recurse: false,
-                            },
-                        )
-                    }).collect();
+                    .map(|user| (user.permalink.clone(), Entry::UserReference(user)))
+                    .collect();
                 Ok(children)
             }
+            Entry::UserReference(_) => unreachable!("user referebces do not have child files"),
             Entry::Track(_) => unreachable!("tracks do not have child files"),
         }
     }
@@ -288,6 +303,13 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
                 .find(|(n, _)| n == &name)
                 .map(|(_, entry)| entry)
                 .ok_or(Error::ChildNotFound),
+        }
+    }
+
+    fn read_link(&self) -> Result<PathBuf, Error> {
+        match self {
+            Entry::UserReference(user) => Ok(["..", "..", &user.permalink].iter().collect()),
+            _ => unreachable!("not a symlink"),
         }
     }
 }
