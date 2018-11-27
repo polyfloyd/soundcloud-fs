@@ -75,35 +75,37 @@ impl Client {
         let client = default_client();
         let client_id = anonymous_client_id(&client)?;
 
-        trace!("performing password login with user: {}", username.as_ref());
-        let login_req_body = PasswordLoginReqBody {
-            client_id: &client_id,
-            scope: "fast-connect non-expiring purchase signup upload",
-            recaptcha_pubkey: "6LeAxT8UAAAAAOLTfaWhndPCjGOnB54U1GEACb7N",
-            recaptcha_response: None,
-            credentials: Credentials {
-                identifier: username.as_ref(),
-                password: password.as_ref(),
-            },
-            signature: "8:3-1-28405-134-1638720-1024-0-0:4ab691:2",
-            device_id: "381629-667600-267798-887023",
-            user_agent: USER_AGENT,
+        let token = {
+            trace!("performing password login with user: {}", username.as_ref());
+            let login_req_body = PasswordLoginReqBody {
+                client_id: &client_id,
+                scope: "fast-connect non-expiring purchase signup upload",
+                recaptcha_pubkey: "6LeAxT8UAAAAAOLTfaWhndPCjGOnB54U1GEACb7N",
+                recaptcha_response: None,
+                credentials: Credentials {
+                    identifier: username.as_ref(),
+                    password: password.as_ref(),
+                },
+                signature: "8:3-1-28405-134-1638720-1024-0-0:4ab691:2",
+                device_id: "381629-667600-267798-887023",
+                user_agent: USER_AGENT,
+            };
+            let login_url = Url::parse_with_params(
+                "https://api-v2.soundcloud.com/sign-in/password?app_version=1541509103&app_locale=en",
+                &[("client_id", &client_id)],
+            ).unwrap();
+            trace!("password login URL: {}", login_url);
+            let login_res_body: PasswordLoginResBody = client
+                .post(login_url)
+                .json(&login_req_body)
+                .send()?
+                .error_for_status()?
+                .json()?;
+            login_res_body.session.access_token
         };
-        let login_url = Url::parse_with_params(
-            "https://api-v2.soundcloud.com/sign-in/password?app_version=1541509103&app_locale=en",
-            &[("client_id", &client_id)],
-        ).unwrap();
-        trace!("password login URL: {}", login_url);
-        let login_res_body: PasswordLoginResBody = client
-            .post(login_url)
-            .json(&login_req_body)
-            .send()?
-            .error_for_status()?
-            .json()?;
 
-        let token = login_res_body.session.access_token;
         trace!("SoundCloud login got token: {}****", &token[0..4]);
-        Client::from_token(token)
+        Client::from_token(client_id, token)
     }
 
     // Attempt to create a client with read-only access to the public API.
@@ -117,7 +119,7 @@ impl Client {
         })
     }
 
-    pub fn from_token(token: impl Into<String>) -> Result<Client, Error> {
+    fn from_token(client_id: impl Into<String>, token: impl Into<String>) -> Result<Client, Error> {
         let token = token.into();
         let auth_client = reqwest::Client::builder()
             .default_headers({
@@ -126,10 +128,9 @@ impl Client {
                 headers.insert(header::AUTHORIZATION, auth_header);
                 headers
             }).build()?;
-        let client_id = anonymous_client_id(&auth_client)?;
         Ok(Client {
             client: auth_client,
-            client_id,
+            client_id: client_id.into(),
             token: Some(token),
         })
     }
