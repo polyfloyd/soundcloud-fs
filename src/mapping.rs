@@ -315,15 +315,7 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
 }
 
 fn map_track_to_child(track: soundcloud::Track) -> (String, Entry) {
-    let name = {
-        let title = track
-            .title
-            .replace(|c: char| !c.is_alphanumeric() && !c.is_whitespace(), "")
-            .replace("  ", " ")
-            .replace(|c: char| c.is_whitespace(), "_");
-        format!("{}_{}.mp3", title, track.id)
-    };
-    (name, Entry::Track(track))
+    (format!("{}.mp3", track.permalink), Entry::Track(track))
 }
 
 fn timespec_from_datetime(t: &DateTime<Utc>) -> time::Timespec {
