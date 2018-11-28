@@ -4,17 +4,17 @@ version = "0.1.0"
 authors = ["polyfloyd <floyd@polyfloyd.net>"]
 
 [dependencies]
-chrono = "*"
+chrono = "0.4.6"
 clap = "2.32.0"
 env_logger = "*"
-failure = "*"
-failure_derive = "*"
+failure = "0.1.3"
+failure_derive = "0.1.3"
 fuse = "0.3.1"
-id3 = "*"
-libc = "*"
-log = "*"
+id3 = "0.2.5"
+libc = "0.2.44"
+log = "0.4.6"
 soundcloud = { path = "./soundcloud" }
-time = "*"
+time = "0.1.40"
 
 [workspace]
 members = [
