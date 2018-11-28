@@ -321,8 +321,7 @@ fn map_track_to_child(track: soundcloud::Track) -> (String, Entry) {
             .replace(|c: char| !c.is_alphanumeric() && !c.is_whitespace(), "")
             .replace("  ", " ")
             .replace(|c: char| c.is_whitespace(), "_");
-        let ext = track.audio_format();
-        format!("{}_{}.{}", title, track.id, ext)
+        format!("{}_{}.mp3", title, track.id)
     };
     (name, Entry::Track(track))
 }

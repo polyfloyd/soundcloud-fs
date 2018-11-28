@@ -69,7 +69,7 @@ pub struct Track<'a> {
 }
 
 impl<'a> Track<'a> {
-    pub fn audio_format(&self) -> &str {
+    pub fn download_format(&self) -> &str {
         if self.download_url.is_none() {
             return "mp3";
         }
@@ -80,17 +80,19 @@ impl<'a> Track<'a> {
         }
     }
 
-    pub fn audio(&self) -> Result<impl io::Read + io::Seek + 'a, Error> {
+    pub fn download(&self) -> Result<impl io::Read + io::Seek + 'a, Error> {
         let sc_client = self.client.unwrap();
-
-        if let Some(raw_url) = self.download_url.as_ref() {
-            trace!("accessing audio through the download URL");
+        if let Some(ref raw_url) = self.download_url {
             let (req_builder, _) = sc_client.request(Method::GET, Url::parse(raw_url)?)?;
             let req = req_builder.build()?;
-            return Ok(http::RangeSeeker::new(&sc_client.client, req)?);
+            Ok(http::RangeSeeker::new(&sc_client.client, req)?)
+        } else {
+            Err(Error::DownloadNotAvailable)
         }
+    }
 
-        trace!("accessing audio through the streams API");
+    pub fn audio(&self) -> Result<impl io::Read + io::Seek + 'a, Error> {
+        let sc_client = self.client.unwrap();
         let raw_url = format!("https://api.soundcloud.com/i1/tracks/{}/streams", self.id);
         let streams: StreamInfo = sc_client.query(Method::GET, &raw_url)?;
         let req = default_client()

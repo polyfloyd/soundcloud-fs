@@ -10,8 +10,8 @@ pub enum Error {
     #[fail(display = "client has no token")]
     NoToken,
 
-    #[fail(display = "audio not accessible")]
-    AudioNotAccessible,
+    #[fail(display = "downlaod not available")]
+    DownloadNotAvailable,
 
     #[fail(display = "could not load client form cache: {}", _0)]
     FromCache(Box<error::Error + Send + Sync>),
