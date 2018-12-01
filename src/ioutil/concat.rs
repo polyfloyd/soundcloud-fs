@@ -121,20 +121,19 @@ where
                 // just trying to index up the closest we can get to infinity with a 64 bit int.
                 self.index_up_to(std::u64::MAX)?;
                 let length = self.ranges.last().unwrap().end as i64;
-                length + offset
+                let new_offset = length + offset;
+                if new_offset < 0 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        format!(
+                            "ioutil::Concat: seek position {:?} resolves to {}",
+                            pos, new_offset
+                        ),
+                    ));
+                }
+                new_offset
             }
         };
-        let length = self.ranges.last().unwrap().end as i64;
-
-        if new_offset < 0 || length < new_offset {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "ioutil::Concat: seek position {:?} outside range 0..{}",
-                    pos, length
-                ),
-            ));
-        }
 
         self.offset = new_offset as u64;
         self.chunk_index = self
@@ -327,5 +326,19 @@ mod tests {
 
         println!("{:?}", concat.files[1].ops());
         assert_eq!(concat.files[1].ops().len(), 0);
+    }
+
+    #[test]
+    fn seek_beyond_length() {
+        let mut concat = Concat::new(vec![
+            io::Cursor::new(vec![0; 4]),
+            io::Cursor::new(vec![0; 4]),
+        ]).unwrap();
+
+        concat.seek(io::SeekFrom::End(8)).unwrap();
+
+        let mut buf = vec![0; 4];
+        let nread = concat.read(&mut buf).unwrap();
+        assert_eq!(nread, 0);
     }
 }
