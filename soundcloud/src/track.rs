@@ -180,13 +180,13 @@ struct StreamInfo {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TrackUser {
-    id: i64,
-    permalink: String,
-    username: String,
-    last_modified: String,
-    uri: String,
-    permalink_url: String,
-    avatar_url: String,
+    pub id: i64,
+    pub permalink: String,
+    pub username: String,
+    pub last_modified: String,
+    pub uri: String,
+    pub permalink_url: String,
+    pub avatar_url: String,
 }
 
 fn empty_str_as_none<'de, D: Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
