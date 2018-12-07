@@ -134,10 +134,8 @@ impl<'a> io::Seek for RangeSeeker<'a> {
                     self.next_resp()?;
                 }
                 valid_offset(self.content_length.unwrap() as i64 + offset)?
-            },
-            io::SeekFrom::Current(offset) => {
-                valid_offset(self.current_offset as i64 + offset)?
-            },
+            }
+            io::SeekFrom::Current(offset) => valid_offset(self.current_offset as i64 + offset)?,
         };
 
         let mut new_state = if pos == io::SeekFrom::End(0) {

@@ -143,7 +143,8 @@ impl Client {
                 let mut headers = default_headers();
                 headers.insert(header::AUTHORIZATION, auth_header);
                 headers
-            }).build()?;
+            })
+            .build()?;
         Ok(Client {
             client: auth_client,
             client_id: client_id.into(),

@@ -146,7 +146,8 @@ where
                 } else {
                     Ordering::Equal
                 }
-            }).unwrap_or_else(|_| self.ranges.len() - 1);
+            })
+            .unwrap_or_else(|_| self.ranges.len() - 1);
 
         let file = &mut self.files[self.chunk_index];
         let range = &mut self.ranges[self.chunk_index];
@@ -318,7 +319,8 @@ mod tests {
         let mut concat = Concat::new(vec![
             OpRecorder::new(io::Cursor::new(vec![0; 4])),
             OpRecorder::new(io::Cursor::new(vec![0; 4])),
-        ]).unwrap();
+        ])
+        .unwrap();
 
         let mut buf = vec![0; 4];
         concat.read(&mut buf).unwrap();
@@ -333,7 +335,8 @@ mod tests {
         let mut concat = Concat::new(vec![
             io::Cursor::new(vec![0; 4]),
             io::Cursor::new(vec![0; 4]),
-        ]).unwrap();
+        ])
+        .unwrap();
 
         concat.seek(io::SeekFrom::End(8)).unwrap();
 

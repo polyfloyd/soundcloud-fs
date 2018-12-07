@@ -263,7 +263,8 @@ where
             .map(|(name, entry)| {
                 let ino = inode_for_child(parent_ino, &name);
                 (name, entry, ino)
-            }).collect();
+            })
+            .collect();
 
         let fh = self.next_readdir_handle;
         self.next_readdir_handle += 1;

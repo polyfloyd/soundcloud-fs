@@ -244,7 +244,8 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
                         recurse: true,
                     };
                     Ok((name.clone(), entry))
-                }).collect(),
+                })
+                .collect(),
             Entry::User { user, recurse } => {
                 let mut children = Vec::new();
                 if *recurse {
