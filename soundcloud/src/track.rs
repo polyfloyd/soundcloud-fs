@@ -101,7 +101,12 @@ impl<'a> Track<'a> {
         Ok(http::RangeSeeker::new(default_client(), req)?)
     }
 
-    pub fn id3_tag(&self) -> Result<id3::Tag, Error> {
+    pub fn audio_size(&self) -> u64 {
+        let bitrate = 128; // Kb/s
+        (self.duration_ms * bitrate) as u64 / 8
+    }
+
+    pub fn id3_tag(&self) -> Result<impl io::Read + io::Seek, Error> {
         let mut tag = id3::Tag::new();
 
         tag.set_artist(self.user.username.as_str());
@@ -166,7 +171,10 @@ impl<'a> Track<'a> {
             })
         }
 
-        Ok(tag)
+        let mut id3_tag_buf = Vec::new();
+        tag.write_to(&mut id3_tag_buf, id3::Version::Id3v24)
+            .unwrap();
+        Ok(io::Cursor::new(id3_tag_buf))
     }
 }
 

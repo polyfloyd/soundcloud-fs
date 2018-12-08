@@ -3,7 +3,7 @@ use filesystem;
 use id3;
 use ioutil::{self, Concat, LazyOpen, ReadSeek};
 use soundcloud;
-use std::io;
+use std::io::{self, Seek};
 use std::path::PathBuf;
 use time;
 
@@ -178,10 +178,21 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
             Entry::Track(track) => {
                 let ctime = timespec_from_datetime(&track.created_at);
                 let mtime = timespec_from_datetime(&track.last_modified);
+
+                let size = {
+                    let id3_tag_size = {
+                        let mut b = track.id3_tag().unwrap();
+                        b.seek(io::SeekFrom::End(0)).unwrap()
+                    };
+                    let padding_size = 1_000_000;
+                    let mpeg_size = track.audio_size();
+                    id3_tag_size + padding_size + mpeg_size
+                };
+
                 fuse::FileAttr {
                     ino,
-                    size: track.original_content_size,
-                    blocks: track.original_content_size / BLOCK_SIZE + 1,
+                    size,
+                    blocks: size / BLOCK_SIZE + 1,
                     atime: mtime,
                     mtime,
                     ctime,
@@ -201,10 +212,7 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
     fn open_ro(&self) -> Result<Box<ReadSeek + 'a>, Error> {
         match self {
             Entry::Track(track) => {
-                let mut id3_tag_buf = Vec::new();
-                let id3_tag = track.id3_tag()?;
-                id3_tag.write_to(&mut id3_tag_buf, id3::Version::Id3v24)?;
-                let id3_tag_cursor = Box::new(io::Cursor::new(id3_tag_buf));
+                let id3_tag = Box::new(track.id3_tag()?);
 
                 // Hackety hack: the file concatenation abstraction is able to lazily index the
                 // size of the underlying files. This ensures for programs that just want to probe
@@ -224,7 +232,7 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
                 }));
 
                 let concat = Concat::new(vec![
-                    Box::<ReadSeek>::from(id3_tag_cursor),
+                    Box::<ReadSeek>::from(id3_tag),
                     Box::<ReadSeek>::from(padding),
                     Box::<ReadSeek>::from(audio),
                 ])?;
