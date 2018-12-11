@@ -1,7 +1,7 @@
 use std::io;
 use std::mem;
 
-pub enum LazyOpen<O, T>
+enum State<O, T>
 where
     O: FnOnce() -> io::Result<T>,
     T: io::Read,
@@ -12,37 +12,47 @@ where
     Init,
 }
 
+pub struct LazyOpen<O, T>
+where
+    O: FnOnce() -> io::Result<T>,
+    T: io::Read,
+{
+    state: State<O, T>,
+}
+
 impl<O, T> LazyOpen<O, T>
 where
     O: FnOnce() -> io::Result<T>,
     T: io::Read,
 {
-    pub fn new(open_fn: O) -> LazyOpen<O, T> {
-        LazyOpen::Unopened(open_fn)
+    pub fn new(open_fn: O) -> Self {
+        LazyOpen {
+            state: State::Unopened(open_fn),
+        }
     }
 
     fn file_mut(&mut self) -> io::Result<&mut T> {
-        match self {
-            LazyOpen::Opened(ref mut file) => {
+        match self.state {
+            State::Opened(ref mut file) => {
                 return Ok(file);
             }
-            LazyOpen::Error(err) => {
+            State::Error(ref err) => {
                 return Err(io::Error::new(err.kind(), format!("{}", err)));
             }
-            LazyOpen::Unopened(_) => (),
-            LazyOpen::Init => unreachable!(),
-        }
+            State::Unopened(_) => (),
+            State::Init => unreachable!(),
+        };
 
-        let mut init = LazyOpen::Init;
-        mem::swap(self, &mut init);
+        let mut init = State::Init;
+        mem::swap(&mut self.state, &mut init);
         let open_fn = match init {
-            LazyOpen::Unopened(v) => v,
+            State::Unopened(v) => v,
             _ => unreachable!(),
         };
 
-        *self = match open_fn() {
-            Ok(file) => LazyOpen::Opened(file),
-            Err(err) => LazyOpen::Error(err),
+        self.state = match open_fn() {
+            Ok(file) => State::Opened(file),
+            Err(err) => State::Error(err),
         };
         self.file_mut()
     }
