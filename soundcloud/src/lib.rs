@@ -197,7 +197,7 @@ impl fmt::Debug for Client {
             .as_ref()
             .filter(|t| t.len() >= 4)
             .map(|t| format!("{}****", &t[0..4]))
-            .unwrap_or("<unset>".to_string());
+            .unwrap_or_else(|| "<unset>".to_string());
         write!(f, "Client {{ id: {}, token: {} }}", self.client_id, token)
     }
 }

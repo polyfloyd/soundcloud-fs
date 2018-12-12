@@ -21,7 +21,7 @@ impl<T> Concat<T>
 where
     T: io::Read,
 {
-    pub fn new(files: Vec<T>) -> io::Result<Concat<T>> {
+    pub fn new(files: Vec<T>) -> io::Result<Self> {
         if files.is_empty() {
             return Err(io::Error::new(io::ErrorKind::Other, "no files specified"));
         }

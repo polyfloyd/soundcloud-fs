@@ -5,7 +5,7 @@ use std::mem;
 
 enum RangeSeekerState {
     NoResponse,
-    Response(reqwest::Response),
+    Response(Box<reqwest::Response>),
     OutOfRange,
 }
 
@@ -19,15 +19,12 @@ pub struct RangeSeeker<'a> {
     content_length: Option<u64>,
 
     // The previous request scheme is used as an optimization for file size probes.
-    response_cache: Option<(reqwest::Response, u64)>,
+    response_cache: Option<(Box<reqwest::Response>, u64)>,
 }
 
 impl<'a> RangeSeeker<'a> {
-    pub fn new(
-        client: &reqwest::Client,
-        req: reqwest::Request,
-    ) -> Result<RangeSeeker, reqwest::Error> {
-        Ok(RangeSeeker {
+    pub fn new(client: &'a reqwest::Client, req: reqwest::Request) -> Self {
+        RangeSeeker {
             client,
             req,
             num_requests: 0,
@@ -35,7 +32,7 @@ impl<'a> RangeSeeker<'a> {
             current_offset: 0,
             content_length: None,
             response_cache: None,
-        })
+        }
     }
 
     fn next_resp(&mut self) -> io::Result<()> {
@@ -81,7 +78,7 @@ impl<'a> RangeSeeker<'a> {
                 )
             })?;
             self.content_length = Some(self.current_offset + clen);
-            self.state = RangeSeekerState::Response(res);
+            self.state = RangeSeekerState::Response(Box::new(res));
             return Ok(());
         }
 
@@ -227,7 +224,7 @@ mod tests {
         let client = reqwest::Client::new();
         let req = test_request(SIZE);
 
-        let mut f = RangeSeeker::new(&client, req).unwrap();
+        let mut f = RangeSeeker::new(&client, req);
 
         let mut buf = Vec::new();
         f.read_to_end(&mut buf).unwrap();
@@ -242,7 +239,7 @@ mod tests {
         let client = reqwest::Client::new();
         let req = test_request(SIZE);
 
-        let mut f = RangeSeeker::new(&client, req).unwrap();
+        let mut f = RangeSeeker::new(&client, req);
 
         let new_pos = f.seek(io::SeekFrom::Start(4000)).unwrap();
         assert_eq!(4000, new_pos);
@@ -260,7 +257,7 @@ mod tests {
         let client = reqwest::Client::new();
         let req = test_request(SIZE);
 
-        let mut f = RangeSeeker::new(&client, req).unwrap();
+        let mut f = RangeSeeker::new(&client, req);
 
         let new_pos = f.seek(io::SeekFrom::End(0)).unwrap();
         assert_eq!(SIZE as u64, new_pos);
@@ -278,7 +275,7 @@ mod tests {
         let client = reqwest::Client::new();
         let req = test_request(SIZE);
 
-        let mut f = RangeSeeker::new(&client, req).unwrap();
+        let mut f = RangeSeeker::new(&client, req);
 
         let new_pos = f.seek(io::SeekFrom::End(0)).unwrap();
         assert_eq!(SIZE as u64, new_pos);
@@ -299,7 +296,7 @@ mod tests {
         let client = reqwest::Client::new();
         let req = test_request(SIZE);
 
-        let mut f = RangeSeeker::new(&client, req).unwrap();
+        let mut f = RangeSeeker::new(&client, req);
 
         let new_pos = f.seek(io::SeekFrom::End(-100)).unwrap();
         assert_eq!(SIZE as u64 - 100, new_pos);

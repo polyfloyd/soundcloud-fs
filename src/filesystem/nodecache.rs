@@ -73,7 +73,7 @@ where
                 .as_ref()
                 .unwrap()
                 .iter()
-                .find(|(n, _)| n == &name)
+                .find(|(n, _)| n == name)
                 .map(|(_, entry)| entry);
             if let Some(child) = maybe_child {
                 return Ok(child.clone());

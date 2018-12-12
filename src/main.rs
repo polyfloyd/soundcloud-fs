@@ -48,7 +48,7 @@ fn main() {
                 .long("login")
                 .value_name("username:password")
                 .takes_value(true)
-                .validator(|s| match s.splitn(2, ":").count() {
+                .validator(|s| match s.splitn(2, ':').count() {
                     2 => Ok(()),
                     c => Err(format!("bad credential format, split on : yields {} strings", c)),
                 }).help("Logs in using a username and password instead of accessing the API anonymously"),
@@ -63,7 +63,7 @@ fn main() {
     };
 
     let login = cli.value_of("login").and_then(|s| {
-        let mut i = s.splitn(2, ":");
+        let mut i = s.splitn(2, ':');
         let u = i.next().unwrap();
         i.next().map(|p| (u, p))
     });

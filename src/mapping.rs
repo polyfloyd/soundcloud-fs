@@ -281,18 +281,14 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
                     children.push(("favorites".to_string(), Entry::UserFavorites(user.clone())));
                     children.push(("following".to_string(), Entry::UserFollowing(user.clone())));
                 }
-                children.extend(
-                    user.tracks()?
-                        .into_iter()
-                        .map(|track| map_track_to_child(track)),
-                );
+                children.extend(user.tracks()?.into_iter().map(map_track_to_child));
                 Ok(children)
             }
             Entry::UserFavorites(user) => {
                 let children: Vec<_> = user
                     .favorites()?
                     .into_iter()
-                    .map(|track| map_track_to_child(track))
+                    .map(map_track_to_child)
                     .collect();
                 Ok(children)
             }
@@ -316,7 +312,7 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
                     "autorun.inf" | "BDMV" => {
                         return Err(Error::ChildNotFound);
                     }
-                    name if name.starts_with(".") => {
+                    name if name.starts_with('.') => {
                         return Err(Error::ChildNotFound);
                     }
                     _ => (),
@@ -330,7 +326,7 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
             _ => self
                 .children()?
                 .into_iter()
-                .find(|(n, _)| n == &name)
+                .find(|(n, _)| n == name)
                 .map(|(_, entry)| entry)
                 .ok_or(Error::ChildNotFound),
         }

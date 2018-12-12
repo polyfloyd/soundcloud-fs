@@ -87,7 +87,7 @@ impl<'a> Track<'a> {
         if let Some(ref raw_url) = self.download_url {
             let (req_builder, _) = sc_client.request(Method::GET, Url::parse(raw_url)?)?;
             let req = req_builder.build()?;
-            Ok(http::RangeSeeker::new(&sc_client.client, req)?)
+            Ok(http::RangeSeeker::new(&sc_client.client, req))
         } else {
             Err(Error::DownloadNotAvailable)
         }
@@ -100,7 +100,7 @@ impl<'a> Track<'a> {
         let req = default_client()
             .request(Method::GET, Url::parse(&streams.http_mp3_128_url)?)
             .build()?;
-        Ok(http::RangeSeeker::new(default_client(), req)?)
+        Ok(http::RangeSeeker::new(default_client(), req))
     }
 
     pub fn audio_size(&self) -> u64 {
