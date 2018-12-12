@@ -2,6 +2,7 @@ mod node;
 mod nodecache;
 
 use fuse;
+use log::*;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::ffi;
@@ -12,7 +13,7 @@ use std::os::unix::ffi::OsStrExt;
 
 pub use self::node::*;
 pub use self::nodecache::*;
-pub use ioutil::*;
+pub use crate::ioutil::*;
 
 const INO_ROOT: u64 = 1;
 

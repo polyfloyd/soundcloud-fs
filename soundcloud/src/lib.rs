@@ -4,22 +4,13 @@ mod track;
 mod user;
 pub(crate) mod util;
 
-extern crate chrono;
-extern crate failure;
 #[macro_use]
 extern crate failure_derive;
-extern crate id3;
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate log;
-extern crate regex;
-extern crate reqwest;
-extern crate serde;
 #[macro_use]
 extern crate serde_derive;
-extern crate serde_json;
 
+use lazy_static::lazy_static;
+use log::*;
 use regex::bytes::Regex;
 use reqwest::{header, Url};
 use serde::de::DeserializeOwned;

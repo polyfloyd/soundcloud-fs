@@ -1,3 +1,4 @@
+use log::*;
 use reqwest::header::{self, HeaderValue};
 use reqwest::StatusCode;
 use std::io;
