@@ -281,14 +281,23 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
                     children.push(("favorites".to_string(), Entry::UserFavorites(user.clone())));
                     children.push(("following".to_string(), Entry::UserFollowing(user.clone())));
                 }
-                children.extend(user.tracks()?.into_iter().map(map_track_to_child));
+                children.extend(
+                    user.tracks()?
+                        .into_iter()
+                        .map(|track| (format!("{}.mp3", track.permalink), Entry::Track(track))),
+                );
                 Ok(children)
             }
             Entry::UserFavorites(user) => {
                 let children: Vec<_> = user
                     .favorites()?
                     .into_iter()
-                    .map(map_track_to_child)
+                    .map(|track| {
+                        (
+                            format!("{}_-_{}.mp3", track.user.permalink, track.permalink),
+                            Entry::Track(track),
+                        )
+                    })
                     .collect();
                 Ok(children)
             }
@@ -338,13 +347,6 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
             _ => unreachable!("not a symlink"),
         }
     }
-}
-
-fn map_track_to_child(track: soundcloud::Track) -> (String, Entry) {
-    (
-        format!("{}_-_{}.mp3", track.user.permalink, track.permalink),
-        Entry::Track(track),
-    )
 }
 
 fn timespec_from_datetime(t: &DateTime<Utc>) -> time::Timespec {
