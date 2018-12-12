@@ -1,5 +1,6 @@
 use std::io;
 
+#[allow(unused)]
 pub fn zeros(length: u64) -> impl io::Read + io::Seek {
     Zeros {
         length: length as i64,

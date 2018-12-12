@@ -5,6 +5,8 @@ use serde::{Deserialize, Deserializer};
 use std::io;
 use util::http;
 
+const AUDIO_CBR_BITRATE: u64 = 128_000;
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct Track<'a> {
     pub id: i64,
@@ -102,8 +104,7 @@ impl<'a> Track<'a> {
     }
 
     pub fn audio_size(&self) -> u64 {
-        let bitrate = 128; // Kb/s
-        (self.duration_ms * bitrate) as u64 / 8
+        self.duration_ms as u64 * AUDIO_CBR_BITRATE / 1000 / 8
     }
 
     pub fn id3_tag(&self) -> Result<impl io::Read + io::Seek, Error> {

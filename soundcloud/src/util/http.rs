@@ -59,7 +59,11 @@ impl<'a> RangeSeeker<'a> {
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
 
         if res.status() == StatusCode::RANGE_NOT_SATISFIABLE {
+            let o = self.current_offset;
+            self.current_offset = 0;
+            self.next_resp()?;
             self.state = RangeSeekerState::OutOfRange;
+            self.current_offset = o;
             return Ok(());
         }
 

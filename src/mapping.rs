@@ -1,13 +1,17 @@
 use chrono::{DateTime, Utc};
 use filesystem;
 use id3;
-use ioutil::{self, Concat, LazyOpen, ReadSeek};
+use ioutil::{Concat, LazyOpen, ReadSeek, Skip};
+use mp3;
 use soundcloud;
 use std::io::{self, Seek};
 use std::path::PathBuf;
 use time;
 
 const BLOCK_SIZE: u64 = 1024;
+
+const PADDING_START: u64 = 500;
+const PADDING_END: u64 = 20;
 
 #[derive(Debug, Fail)]
 pub enum Error {
@@ -181,12 +185,16 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
 
                 let size = {
                     let id3_tag_size = {
-                        let mut b = track.id3_tag().unwrap();
+                        let mut b = track.id3_tag().unwrap(); // TODO: remove unwrap
                         b.seek(io::SeekFrom::End(0)).unwrap()
                     };
-                    let padding_size = 1_000_000;
-                    let mpeg_size = track.audio_size();
-                    id3_tag_size + padding_size + mpeg_size
+                    let mp3_size = {
+                        let padding_len = mp3::zero_headers(1).len() as u64;
+                        track.audio_size() as u64
+                            + PADDING_START * padding_len
+                            + PADDING_END * padding_len
+                    };
+                    id3_tag_size + mp3_size
                 };
 
                 fuse::FileAttr {
@@ -212,7 +220,14 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
     fn open_ro(&self) -> Result<Box<ReadSeek + 'a>, Error> {
         match self {
             Entry::Track(track) => {
-                let id3_tag = Box::new(track.id3_tag()?);
+                let id3_tag = track.id3_tag()?;
+
+                let remote_mp3_size = track.audio_size() as u64;
+                let padding_len = mp3::zero_headers(1).len() as u64;
+                let mp3_total_size =
+                    remote_mp3_size + PADDING_START * padding_len + PADDING_END * padding_len;
+                let mp3_header = mp3::cbr_header(mp3_total_size);
+                let first_frame_size = mp3_header.len() as u64;
 
                 // Hackety hack: the file concatenation abstraction is able to lazily index the
                 // size of the underlying files. This ensures for programs that just want to probe
@@ -222,19 +237,25 @@ impl<'a> filesystem::Node<'a> for Entry<'a> {
                 // still be accessed. To counter this, we jam a very large swath of zero bytes in
                 // between the metadata and audio stream to saturate the read buffer without the
                 // audio stream.
-                let padding = Box::new(ioutil::zeros(1_000_000));
+                let padding_start = mp3::zero_headers(PADDING_START);
+                // We also need some padding at the end for players that try to
+                // read ID3v1 metadata.
+                let padding_end = mp3::zero_headers(PADDING_END);
 
                 let track_cp = track.clone();
-                let audio = Box::new(LazyOpen::new(move || {
-                    track_cp
+                let audio = LazyOpen::with_size_hint(remote_mp3_size, move || {
+                    let f = track_cp
                         .audio()
-                        .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{}", err)))
-                }));
+                        .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{}", err)))?;
+                    Ok(Skip::new(f, first_frame_size))
+                });
 
                 let concat = Concat::new(vec![
-                    Box::<ReadSeek>::from(id3_tag),
-                    Box::<ReadSeek>::from(padding),
-                    Box::<ReadSeek>::from(audio),
+                    Box::<ReadSeek>::from(Box::new(id3_tag)),
+                    Box::<ReadSeek>::from(Box::new(io::Cursor::new(mp3_header))),
+                    Box::<ReadSeek>::from(Box::new(io::Cursor::new(padding_start))),
+                    Box::<ReadSeek>::from(Box::new(audio)),
+                    Box::<ReadSeek>::from(Box::new(io::Cursor::new(padding_end))),
                 ])?;
                 Ok(Box::new(concat))
             }

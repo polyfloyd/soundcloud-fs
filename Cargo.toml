@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["polyfloyd <floyd@polyfloyd.net>"]
 
 [dependencies]
+byteorder = "1.2.7"
 chrono = "0.4.6"
 clap = "2.32.0"
 env_logger = "*"

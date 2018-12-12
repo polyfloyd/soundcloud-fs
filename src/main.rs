@@ -1,3 +1,4 @@
+extern crate byteorder;
 extern crate chrono;
 extern crate clap;
 extern crate env_logger;
@@ -15,6 +16,7 @@ extern crate time;
 mod filesystem;
 mod ioutil;
 mod mapping;
+mod mp3;
 
 use self::filesystem::*;
 use self::mapping::*;

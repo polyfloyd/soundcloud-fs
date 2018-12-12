@@ -18,6 +18,8 @@ where
     T: io::Read,
 {
     state: State<O, T>,
+    size_hint: Option<u64>,
+    size_hint_seek_dirty: Option<io::SeekFrom>,
 }
 
 impl<O, T> LazyOpen<O, T>
@@ -25,9 +27,20 @@ where
     O: FnOnce() -> io::Result<T>,
     T: io::Read,
 {
+    #[allow(unused)]
     pub fn new(open_fn: O) -> Self {
         LazyOpen {
             state: State::Unopened(open_fn),
+            size_hint: None,
+            size_hint_seek_dirty: None,
+        }
+    }
+
+    pub fn with_size_hint(size_hint: u64, open_fn: O) -> Self {
+        LazyOpen {
+            state: State::Unopened(open_fn),
+            size_hint: Some(size_hint),
+            size_hint_seek_dirty: None,
         }
     }
 
@@ -61,9 +74,13 @@ where
 impl<O, T> io::Read for LazyOpen<O, T>
 where
     O: FnOnce() -> io::Result<T>,
-    T: io::Read,
+    T: io::Read + io::Seek,
 {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if let Some(pos) = self.size_hint_seek_dirty.take() {
+            let file = self.file_mut()?;
+            file.seek(pos)?;
+        }
         let file = self.file_mut()?;
         file.read(buf)
     }
@@ -75,6 +92,12 @@ where
     T: io::Read + io::Seek,
 {
     fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
+        if let Some(s) = self.size_hint {
+            if pos == io::SeekFrom::End(0) {
+                self.size_hint_seek_dirty = Some(pos);
+                return Ok(s);
+            }
+        }
         let file = self.file_mut()?;
         file.seek(pos)
     }
@@ -88,7 +111,7 @@ mod tests {
     #[test]
     fn open_read() {
         let data = vec![1, 2, 3, 4];
-        let mut file = LazyOpen::new(|| Ok(&data[..]));
+        let mut file = LazyOpen::new(|| Ok(io::Cursor::new(&data)));
 
         let mut buf = vec![0; 4];
         let nread = file.read(&mut buf).unwrap();
