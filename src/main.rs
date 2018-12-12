@@ -44,11 +44,15 @@ fn main() {
         ).arg(
             clap::Arg::with_name("id3-images")
                 .long("id3-images")
+                .value_name("enable")
+                .takes_value(true)
+                .default_value("0")
+                .possible_values(&["0", "1"])
                 .help("Enables image metadata in ID3 tags. This will incur an additional HTTP request everytime a file is opened for reading"),
         ).get_matches();
 
     let sc_config = soundcloud::Config {
-        id3_download_images: cli.is_present("id3-images"),
+        id3_download_images: cli.value_of("id3-images") == Some("1"),
     };
 
     let login = cli.value_of("login").and_then(|s| {
