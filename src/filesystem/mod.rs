@@ -11,6 +11,7 @@ use std::io;
 use std::os;
 use std::os::unix::ffi::OsStrExt;
 
+pub use self::node::Metadata;
 pub use self::node::*;
 pub use self::nodecache::*;
 pub use crate::ioutil::*;
