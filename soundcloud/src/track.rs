@@ -37,10 +37,12 @@ pub struct Track<'a> {
     pub genre: Option<String>,
     pub title: String,
     pub description: Option<String>,
+    #[serde(deserialize_with = "empty_str_as_none")]
     pub label_name: Option<String>,
     pub release: Option<String>,
     pub track_type: Option<String>,
     pub key_signature: Option<String>,
+    #[serde(deserialize_with = "empty_str_as_none")]
     pub isrc: Option<String>,
     pub video_url: Option<String>,
     pub bpm: Option<i32>,
@@ -135,10 +137,10 @@ impl<'a> Track<'a> {
         if let Some(bpm) = self.bpm {
             tag.set_text("TBPM", format!("{}", bpm));
         }
-        if let Some(label) = self.label_name.as_ref().filter(|s| !s.is_empty()) {
+        if let Some(ref label) = self.label_name {
             tag.set_text("TPUB", label.as_str());
         }
-        if let Some(isrc) = self.isrc.as_ref().filter(|s| !s.is_empty()) {
+        if let Some(ref isrc) = self.isrc {
             tag.set_text("TSRC", isrc.as_str());
         }
 
