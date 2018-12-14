@@ -3,6 +3,7 @@ use crate::*;
 use chrono::{DateTime, Datelike, Utc};
 use reqwest::{Method, Url};
 use serde::{Deserialize, Deserializer};
+use std::hash::{Hash, Hasher};
 use std::io;
 
 const AUDIO_CBR_BITRATE: u64 = 128_000;
@@ -178,6 +179,12 @@ impl<'a> Track<'a> {
         tag.write_to(&mut id3_tag_buf, id3::Version::Id3v24)
             .unwrap();
         Ok(io::Cursor::new(id3_tag_buf))
+    }
+}
+
+impl Hash for Track<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
     }
 }
 

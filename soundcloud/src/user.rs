@@ -2,6 +2,7 @@ use super::*;
 use super::{Client, Error};
 use chrono::{DateTime, Utc};
 use reqwest::Method;
+use std::hash::{Hash, Hasher};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct User<'a> {
@@ -136,5 +137,11 @@ impl<'a> User<'a> {
             user.client = self.client;
         }
         Ok(users)
+    }
+}
+
+impl Hash for User<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
     }
 }
