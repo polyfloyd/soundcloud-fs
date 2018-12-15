@@ -350,7 +350,7 @@ impl<'a> filesystem::File for TrackAudio<'a> {
             Box::<ReadSeek>::from(Box::new(io::Cursor::new(padding_start))),
             Box::<ReadSeek>::from(Box::new(audio)),
             Box::<ReadSeek>::from(Box::new(io::Cursor::new(padding_end))),
-        ])?;
+        ]);
         Ok(concat)
     }
 

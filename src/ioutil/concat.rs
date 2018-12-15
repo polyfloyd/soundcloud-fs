@@ -21,17 +21,13 @@ impl<T> Concat<T>
 where
     T: io::Read,
 {
-    pub fn new(files: Vec<T>) -> io::Result<Self> {
-        if files.is_empty() {
-            return Err(io::Error::new(io::ErrorKind::Other, "no files specified"));
-        }
-
-        Ok(Concat {
+    pub fn new(files: Vec<T>) -> Self {
+        Concat {
             files,
             ranges: Vec::new(),
             chunk_index: 0,
             offset: 0,
-        })
+        }
     }
 }
 
@@ -136,7 +132,7 @@ where
         };
 
         self.offset = new_offset as u64;
-        self.chunk_index = self
+        let new_chunk_index = self
             .ranges
             .binary_search_by(|range| {
                 if self.offset < range.start {
@@ -147,11 +143,14 @@ where
                     Ordering::Equal
                 }
             })
-            .unwrap_or_else(|_| self.ranges.len() - 1);
-
-        let file = &mut self.files[self.chunk_index];
-        let range = &mut self.ranges[self.chunk_index];
-        file.seek(io::SeekFrom::Start(new_offset as u64 - range.start))?;
+            .ok()
+            .or_else(|| self.ranges.len().checked_sub(1));
+        if let Some(i) = new_chunk_index {
+            self.chunk_index = i;
+            let file = &mut self.files[self.chunk_index];
+            let range = &mut self.ranges[self.chunk_index];
+            file.seek(io::SeekFrom::Start(new_offset as u64 - range.start))?;
+        }
         Ok(self.offset)
     }
 }
@@ -165,7 +164,7 @@ mod tests {
     #[test]
     fn read_single_file() {
         let expect = vec![1, 2, 3, 4, 5, 6, 7, 8];
-        let mut concat = Concat::new(vec![io::Cursor::new(expect.clone())]).unwrap();
+        let mut concat = Concat::new(vec![io::Cursor::new(expect.clone())]);
 
         let mut buf = vec![0; expect.len()];
         let nread = concat.read(&mut buf).unwrap();
@@ -179,7 +178,7 @@ mod tests {
     #[test]
     fn read_single_file_multi() {
         let expect = vec![1, 2, 3, 4, 5, 6, 7, 8];
-        let mut concat = Concat::new(vec![io::Cursor::new(expect.clone())]).unwrap();
+        let mut concat = Concat::new(vec![io::Cursor::new(expect.clone())]);
 
         let mut buf = vec![0; 4];
         let nread = concat.read(&mut buf).unwrap();
@@ -198,8 +197,7 @@ mod tests {
     fn read_multiple_files() {
         let a = vec![1, 2, 3, 4];
         let b = vec![5, 6, 7, 8];
-        let mut concat =
-            Concat::new(vec![io::Cursor::new(a.clone()), io::Cursor::new(b.clone())]).unwrap();
+        let mut concat = Concat::new(vec![io::Cursor::new(a.clone()), io::Cursor::new(b.clone())]);
 
         let expect = vec![1, 2, 3, 4, 5, 6, 7, 8];
         let mut buf = vec![0; expect.len()];
@@ -212,8 +210,7 @@ mod tests {
     fn read_multiple_files_multiread() {
         let a = vec![1, 2, 3, 4];
         let b = vec![5, 6, 7, 8];
-        let mut concat =
-            Concat::new(vec![io::Cursor::new(a.clone()), io::Cursor::new(b.clone())]).unwrap();
+        let mut concat = Concat::new(vec![io::Cursor::new(a.clone()), io::Cursor::new(b.clone())]);
 
         let mut buf = vec![0; 6];
         let nread = concat.read(&mut buf).unwrap();
@@ -232,7 +229,7 @@ mod tests {
     #[test]
     fn seek_single_file() {
         let expect = vec![1, 2, 3, 4, 5, 6, 7, 8];
-        let mut concat = Concat::new(vec![io::Cursor::new(expect.clone())]).unwrap();
+        let mut concat = Concat::new(vec![io::Cursor::new(expect.clone())]);
 
         concat.seek(io::SeekFrom::Start(4)).unwrap();
 
@@ -246,8 +243,7 @@ mod tests {
     fn seek_multiple_files_eof() {
         let a = vec![1, 2, 3, 4];
         let b = vec![5, 6, 7, 8];
-        let mut concat =
-            Concat::new(vec![io::Cursor::new(a.clone()), io::Cursor::new(b.clone())]).unwrap();
+        let mut concat = Concat::new(vec![io::Cursor::new(a.clone()), io::Cursor::new(b.clone())]);
 
         let abs_pos = concat.seek(io::SeekFrom::End(0)).unwrap();
         assert_eq!(abs_pos, 8);
@@ -261,8 +257,7 @@ mod tests {
     fn seek_multiple_files_a() {
         let a = vec![1, 2, 3, 4];
         let b = vec![5, 6, 7, 8];
-        let mut concat =
-            Concat::new(vec![io::Cursor::new(a.clone()), io::Cursor::new(b.clone())]).unwrap();
+        let mut concat = Concat::new(vec![io::Cursor::new(a.clone()), io::Cursor::new(b.clone())]);
 
         concat.seek(io::SeekFrom::Start(2)).unwrap();
 
@@ -276,8 +271,7 @@ mod tests {
     fn seek_multiple_files_b() {
         let a = vec![1, 2, 3, 4];
         let b = vec![5, 6, 7, 8];
-        let mut concat =
-            Concat::new(vec![io::Cursor::new(a.clone()), io::Cursor::new(b.clone())]).unwrap();
+        let mut concat = Concat::new(vec![io::Cursor::new(a.clone()), io::Cursor::new(b.clone())]);
 
         concat.seek(io::SeekFrom::Start(6)).unwrap();
 
@@ -291,8 +285,7 @@ mod tests {
     fn seek_after_read() {
         let a = vec![1, 2, 3, 4];
         let b = vec![5, 6, 7, 8];
-        let mut concat =
-            Concat::new(vec![io::Cursor::new(a.clone()), io::Cursor::new(b.clone())]).unwrap();
+        let mut concat = Concat::new(vec![io::Cursor::new(a.clone()), io::Cursor::new(b.clone())]);
 
         let mut buf = vec![0; 2];
         let nread = concat.read(&mut buf).unwrap();
@@ -319,8 +312,7 @@ mod tests {
         let mut concat = Concat::new(vec![
             OpRecorder::new(io::Cursor::new(vec![0; 4])),
             OpRecorder::new(io::Cursor::new(vec![0; 4])),
-        ])
-        .unwrap();
+        ]);
 
         let mut buf = vec![0; 4];
         concat.read(&mut buf).unwrap();
@@ -335,10 +327,29 @@ mod tests {
         let mut concat = Concat::new(vec![
             io::Cursor::new(vec![0; 4]),
             io::Cursor::new(vec![0; 4]),
-        ])
-        .unwrap();
+        ]);
 
         concat.seek(io::SeekFrom::End(8)).unwrap();
+
+        let mut buf = vec![0; 4];
+        let nread = concat.read(&mut buf).unwrap();
+        assert_eq!(nread, 0);
+    }
+
+    #[test]
+    fn empty_read() {
+        let mut concat = Concat::new(Vec::<io::Cursor<&[u8]>>::new());
+
+        let mut buf = vec![0; 4];
+        let nread = concat.read(&mut buf).unwrap();
+        assert_eq!(nread, 0);
+    }
+
+    #[test]
+    fn empty_seek() {
+        let mut concat = Concat::new(Vec::<io::Cursor<&[u8]>>::new());
+
+        concat.seek(io::SeekFrom::Start(4)).unwrap();
 
         let mut buf = vec![0; 4];
         let nread = concat.read(&mut buf).unwrap();
