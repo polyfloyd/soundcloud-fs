@@ -14,8 +14,6 @@ pub struct Metadata {
     pub mtime: DateTime<Utc>,
     pub ctime: DateTime<Utc>,
     pub perm: u16,
-    pub uid: u32,
-    pub gid: u32,
 }
 
 pub trait Meta {

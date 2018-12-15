@@ -86,7 +86,11 @@ fn main() {
         sc_client: &sc_client,
         username: username.to_string(),
     };
-    let fs = FS::new(&CacheRoot::new(&root));
+
+    let uid = nix::unistd::Uid::current().as_raw() as u32;
+    let gid = nix::unistd::Gid::current().as_raw() as u32;
+
+    let fs = FS::new(&CacheRoot::new(&root), uid, gid);
     let path = cli.value_of("path").unwrap();
     fuse::mount(fs, &path, &[]).unwrap();
 }

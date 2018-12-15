@@ -30,13 +30,16 @@ where
 
     readdir_handles: HashMap<u64, Vec<(String, Node<N>, u64)>>,
     next_readdir_handle: u64,
+
+    uid: u32,
+    gid: u32,
 }
 
 impl<'a, N> FS<N>
 where
     N: NodeType,
 {
-    pub fn new(root: &N) -> Self {
+    pub fn new(root: &N, uid: u32, gid: u32) -> Self {
         let mut nodes = HashMap::new();
         nodes.insert(INO_ROOT, Node::Directory(root.root()));
         FS {
@@ -45,6 +48,8 @@ where
             next_read_handle: 1,
             readdir_handles: HashMap::new(),
             next_readdir_handle: 1,
+            uid,
+            gid,
         }
     }
 }
@@ -98,7 +103,7 @@ where
 
         let child_ino = inode_for_child(parent_ino, &name);
 
-        let attrs = match attrs_for_file(&child, child_ino) {
+        let attrs = match attrs_for_file(&child, child_ino, self.uid, self.gid) {
             Ok(v) => v,
             Err(err) => {
                 error!("fuse: can not get attrs for {}: {}", child_ino, err);
@@ -117,7 +122,7 @@ where
         trace!("fuse getattr: {}", ino);
 
         if let Some(node) = self.nodes.get(&ino) {
-            let attrs = match attrs_for_file(&node, ino) {
+            let attrs = match attrs_for_file(&node, ino, self.uid, self.gid) {
                 Ok(v) => v,
                 Err(err) => {
                     error!("fuse: can not get attrs for {}: {}", ino, err);
@@ -562,7 +567,12 @@ fn timespec_from_datetime(t: &DateTime<Utc>) -> time::Timespec {
     time::Timespec::new(t.timestamp(), t.timestamp_subsec_nanos() as i32)
 }
 
-fn attrs_for_file<N: NodeType>(node: &Node<N>, ino: u64) -> Result<fuse::FileAttr, N::Error> {
+fn attrs_for_file<N: NodeType>(
+    node: &Node<N>,
+    ino: u64,
+    uid: u32,
+    gid: u32,
+) -> Result<fuse::FileAttr, N::Error> {
     const BLOCK_SIZE: u64 = 1024;
 
     let meta = node.metadata()?;
@@ -581,8 +591,8 @@ fn attrs_for_file<N: NodeType>(node: &Node<N>, ino: u64) -> Result<fuse::FileAtt
         kind: filetype_for_node(&node),
         perm: meta.perm,
         nlink: 1,
-        uid: meta.uid,
-        gid: meta.gid,
+        uid,
+        gid,
         rdev: 0,
         flags: 0,
     })

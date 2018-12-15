@@ -10,9 +10,6 @@ use std::path::PathBuf;
 const PADDING_START: u64 = 500;
 const PADDING_END: u64 = 20;
 
-const UID: u32 = 0;
-const GID: u32 = 0;
-
 #[derive(Debug, Fail)]
 pub enum Error {
     #[fail(display = "child not found")]
@@ -139,8 +136,6 @@ impl filesystem::Meta for UserList<'_> {
             mtime: now,
             ctime: now,
             perm: 0o555,
-            uid: UID,
-            gid: GID,
         })
     }
 }
@@ -189,8 +184,6 @@ impl filesystem::Meta for UserFavorites<'_> {
             mtime: self.user.last_modified,
             ctime: self.user.last_modified,
             perm: 0o555,
-            uid: UID,
-            gid: GID,
         })
     }
 }
@@ -224,8 +217,6 @@ impl filesystem::Meta for UserFollowing<'_> {
             mtime: self.user.last_modified,
             ctime: self.user.last_modified,
             perm: 0o555,
-            uid: UID,
-            gid: GID,
         })
     }
 }
@@ -261,8 +252,6 @@ impl filesystem::Meta for UserProfile<'_> {
             mtime: self.user.last_modified,
             ctime: self.user.last_modified,
             perm: 0o555,
-            uid: UID,
-            gid: GID,
         })
     }
 }
@@ -307,8 +296,6 @@ impl filesystem::Meta for TrackAudio<'_> {
             mtime: self.track.last_modified,
             ctime: self.track.last_modified,
             perm: 0o444,
-            uid: UID,
-            gid: GID,
         })
     }
 }
@@ -382,8 +369,6 @@ impl filesystem::Meta for UserReference<'_> {
             mtime: self.user.last_modified,
             ctime: self.user.last_modified,
             perm: 0o444,
-            uid: UID,
-            gid: GID,
         })
     }
 }
