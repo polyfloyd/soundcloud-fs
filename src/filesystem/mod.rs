@@ -1,5 +1,5 @@
 mod node;
-//mod nodecache;
+mod nodecache;
 
 use chrono::{DateTime, Utc};
 use fuse;
@@ -14,7 +14,7 @@ use std::os::unix::ffi::OsStrExt;
 
 pub use self::node::*;
 pub use self::node::{Metadata, NodeType};
-//pub use self::nodecache::*;
+pub use self::nodecache::*;
 pub use crate::ioutil::*;
 
 const INO_ROOT: u64 = 1;

@@ -58,6 +58,7 @@ impl From<id3::Error> for Error {
     }
 }
 
+#[derive(Clone)]
 pub struct Root<'a> {
     pub sc_client: &'a soundcloud::Client,
     pub username: String,
@@ -75,6 +76,7 @@ impl<'a> filesystem::NodeType for Root<'a> {
     }
 }
 
+#[derive(Clone)]
 pub enum Dir<'a> {
     UserList(UserList<'a>),
     UserProfile(UserProfile<'a>),
@@ -103,8 +105,18 @@ impl<'a> filesystem::Directory<Root<'a>> for Dir<'a> {
             Dir::UserFollowing(f) => f.files(),
         }
     }
+
+    fn file_by_name(&self, name: &str) -> Result<filesystem::Node2<Root<'a>>, Self::Error> {
+        match self {
+            Dir::UserList(f) => f.file_by_name(name),
+            Dir::UserProfile(f) => f.file_by_name(name),
+            Dir::UserFavorites(f) => f.file_by_name(name),
+            Dir::UserFollowing(f) => f.file_by_name(name),
+        }
+    }
 }
 
+#[derive(Clone)]
 pub struct UserList<'a> {
     sc_client: &'a soundcloud::Client,
     show: Vec<String>,
@@ -162,6 +174,7 @@ impl<'a> filesystem::Directory<Root<'a>> for UserList<'a> {
     }
 }
 
+#[derive(Clone)]
 pub struct UserFavorites<'a> {
     user: soundcloud::User<'a>,
 }
@@ -196,6 +209,7 @@ impl<'a> filesystem::Directory<Root<'a>> for UserFavorites<'a> {
     }
 }
 
+#[derive(Clone)]
 pub struct UserFollowing<'a> {
     user: soundcloud::User<'a>,
 }
@@ -230,6 +244,7 @@ impl<'a> filesystem::Directory<Root<'a>> for UserFollowing<'a> {
     }
 }
 
+#[derive(Clone)]
 pub struct UserProfile<'a> {
     user: soundcloud::User<'a>,
     // Only add child directories for users marked for recursing, to prevent recursing too deeply.
@@ -277,6 +292,7 @@ impl<'a> filesystem::Directory<Root<'a>> for UserProfile<'a> {
     }
 }
 
+#[derive(Clone)]
 pub struct TrackAudio<'a> {
     track: soundcloud::Track<'a>,
 }
@@ -351,6 +367,7 @@ impl<'a> filesystem::File for TrackAudio<'a> {
     }
 }
 
+#[derive(Clone)]
 pub struct UserReference<'a> {
     user: soundcloud::User<'a>,
 }

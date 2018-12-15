@@ -1,103 +1,165 @@
 use super::*;
-use crate::ioutil::*;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
 
-#[derive(Debug, Clone)]
-pub struct NodeCache<'a, T>
+#[derive(Clone)]
+pub struct CacheRoot<N>
 where
-    T: Node<'a> + Clone,
+    N: NodeType + Clone,
+    N::File: Clone,
+    N::Directory: Clone,
+    N::Symlink: Clone,
 {
-    inner: T,
-    cached_children: RefCell<Option<Vec<(String, NodeCache<'a, T>)>>>,
-    hidden_cached_children: RefCell<HashMap<String, NodeCache<'a, T>>>,
-    non_children: RefCell<HashSet<String>>,
+    root: DirCache<N>,
 }
 
-impl<'a, T> NodeCache<'a, T>
+impl<N> CacheRoot<N>
 where
-    T: Node<'a> + Clone,
+    N: NodeType + Clone,
+    N::File: Clone,
+    N::Directory: Clone,
+    N::Symlink: Clone,
 {
-    pub fn new(inner: T) -> NodeCache<'a, T> {
-        NodeCache {
+    pub fn new(inner: N) -> Self {
+        CacheRoot {
+            root: DirCache::new(inner.root()),
+        }
+    }
+}
+
+impl<N> NodeType for CacheRoot<N>
+where
+    N: NodeType + Clone,
+    N::File: Clone,
+    N::Directory: Clone,
+    N::Symlink: Clone,
+{
+    type Error = N::Error;
+    type File = N::File;
+    type Directory = DirCache<N>;
+    type Symlink = N::Symlink;
+
+    fn root(&self) -> Self::Directory {
+        self.root.clone()
+    }
+}
+
+#[derive(Clone)]
+pub struct DirCache<N>
+where
+    N: NodeType + Clone,
+    N::File: Clone,
+    N::Directory: Clone,
+    N::Symlink: Clone,
+{
+    inner: N::Directory,
+    cached_files: RefCell<Option<Vec<(String, Node2<CacheRoot<N>>)>>>,
+    hidden_cached_files: RefCell<HashMap<String, Node2<CacheRoot<N>>>>,
+    non_files: RefCell<HashSet<String>>,
+}
+
+impl<N> DirCache<N>
+where
+    N: NodeType + Clone,
+    N::File: Clone,
+    N::Directory: Clone,
+    N::Symlink: Clone,
+{
+    pub fn new(inner: N::Directory) -> Self {
+        DirCache {
             inner,
-            cached_children: RefCell::new(None),
-            hidden_cached_children: RefCell::new(HashMap::new()),
-            non_children: RefCell::new(HashSet::new()),
+            cached_files: RefCell::new(None),
+            hidden_cached_files: RefCell::new(HashMap::new()),
+            non_files: RefCell::new(HashSet::new()),
         }
     }
 }
 
-impl<'a, T> Node<'a> for NodeCache<'a, T>
+impl<N> Meta for DirCache<N>
 where
-    T: Node<'a> + Clone,
+    N: NodeType + Clone,
+    N::File: Clone,
+    N::Directory: Clone,
+    N::Symlink: Clone,
 {
-    type Error = T::Error;
-
-    fn file_attributes(&self, ino: u64) -> fuse::FileAttr {
-        self.inner.file_attributes(ino)
+    type Error = N::Error;
+    fn metadata(&self) -> Result<Metadata, Self::Error> {
+        self.inner.metadata()
     }
+}
 
-    fn open_ro(&self) -> Result<Box<ReadSeek + 'a>, Self::Error> {
-        self.inner.open_ro()
-    }
-
-    fn children(&self) -> Result<Vec<(String, Self)>, Self::Error> {
-        let mut cached = self.cached_children.borrow_mut();
+impl<N> Directory<CacheRoot<N>> for DirCache<N>
+where
+    N: NodeType + Clone,
+    N::File: Clone,
+    N::Directory: Clone,
+    N::Symlink: Clone,
+{
+    fn files(&self) -> Result<Vec<(String, Node2<CacheRoot<N>>)>, Self::Error> {
+        let mut cached = self.cached_files.borrow_mut();
         if cached.is_some() {
-            return Ok(cached.as_ref().unwrap().clone());
+            return Ok(cached.as_ref().unwrap().to_vec());
         }
-        let children: Vec<_> = self
+        let files: Vec<_> = self
             .inner
-            .children()?
+            .files()?
             .into_iter()
-            .map(|(name, node)| (name, NodeCache::new(node)))
+            .map(|(name, node)| (name, map_node(node)))
             .collect();
-        *cached = Some(children.clone());
-        Ok(children)
+        *cached = Some(files.clone());
+        Ok(files)
     }
 
-    fn child_by_name(&self, name: &str) -> Result<Self, Self::Error> {
-        if self.non_children.borrow().contains(name) {
+    fn file_by_name(&self, name: &str) -> Result<Node2<CacheRoot<N>>, Self::Error> {
+        if self.non_files.borrow().contains(name) {
             return Err(Self::Error::not_found());
         }
 
-        if let Some(child) = self.hidden_cached_children.borrow().get(name) {
-            return Ok(child.clone());
+        if let Some(node) = self.hidden_cached_files.borrow().get(name) {
+            return Ok(node.clone());
         }
 
-        let cached = self.cached_children.borrow_mut();
+        let cached = self.cached_files.borrow_mut();
         if cached.is_some() {
-            let maybe_child = cached
+            let maybe_node = cached
                 .as_ref()
                 .unwrap()
                 .iter()
                 .find(|(n, _)| n == name)
                 .map(|(_, entry)| entry);
-            if let Some(child) = maybe_child {
-                return Ok(child.clone());
+            if let Some(node) = maybe_node {
+                return Ok(node.clone());
             }
         }
 
-        match self.inner.child_by_name(name) {
-            Ok(v) => {
-                let child = NodeCache::new(v);
-                self.hidden_cached_children
+        match self.inner.file_by_name(name) {
+            Ok(node) => {
+                let node = map_node(node);
+                self.hidden_cached_files
                     .borrow_mut()
-                    .insert(name.to_string(), child.clone());
-                Ok(child)
+                    .insert(name.to_string(), node.clone());
+                Ok(node)
             }
             Err(err) => {
                 if err.errno() == libc::ENOENT {
-                    self.non_children.borrow_mut().insert(name.to_string());
+                    self.non_files.borrow_mut().insert(name.to_string());
                 }
                 Err(err)
             }
         }
     }
+}
 
-    fn read_link(&self) -> Result<PathBuf, Self::Error> {
-        self.inner.read_link()
+fn map_node<N>(node: Node2<N>) -> Node2<CacheRoot<N>>
+where
+    N: NodeType + Clone,
+    N::File: Clone,
+    N::Directory: Clone,
+    N::Symlink: Clone,
+{
+    match node {
+        Node2::File(f) => Node2::File(f),
+        Node2::Directory(f) => Node2::Directory(DirCache::new(f)),
+        Node2::Symlink(f) => Node2::Symlink(f),
     }
 }

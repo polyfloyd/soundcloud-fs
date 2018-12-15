@@ -4,20 +4,6 @@ use failure::Fail;
 use std::iter::Iterator;
 use std::path::PathBuf;
 
-//pub trait Node<'a>: Sized {
-//    type Error: Error;
-//
-//    fn file_attributes(&self, ino: u64) -> fuse::FileAttr;
-//
-//    fn open_ro(&self) -> Result<Box<ReadSeek + 'a>, Self::Error>;
-//
-//    fn children(&self) -> Result<Vec<(String, Self)>, Self::Error>;
-//
-//    fn child_by_name(&self, name: &str) -> Result<Self, Self::Error>;
-//
-//    fn read_link(&self) -> Result<PathBuf, Self::Error>;
-//}
-
 pub trait Error: Fail {
     fn not_found() -> Self;
     fn errno(&self) -> i32;
@@ -68,6 +54,7 @@ pub trait NodeType {
     fn root(&self) -> Self::Directory;
 }
 
+#[derive(Clone)]
 pub enum Node2<T: NodeType + ?Sized> {
     File(T::File),
     Directory(T::Directory),
