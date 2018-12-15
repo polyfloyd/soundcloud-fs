@@ -1,43 +1,44 @@
 mod node;
-mod nodecache;
+//mod nodecache;
 
+use chrono::{DateTime, Utc};
 use fuse;
 use log::*;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::ffi;
 use std::hash::{Hash, Hasher};
-use std::io;
+use std::io::{self, Read, Seek};
 use std::os;
 use std::os::unix::ffi::OsStrExt;
 
-pub use self::node::Metadata;
 pub use self::node::*;
-pub use self::nodecache::*;
+pub use self::node::{Metadata, NodeType};
+//pub use self::nodecache::*;
 pub use crate::ioutil::*;
 
 const INO_ROOT: u64 = 1;
 
-pub struct FS<'a, E>
+pub struct FS<N>
 where
-    E: Node<'a>,
+    N: NodeType,
 {
-    nodes: HashMap<u64, E>,
+    nodes: HashMap<u64, Node2<N>>,
 
-    read_handles: HashMap<u64, Box<ReadSeek + 'a>>,
+    read_handles: HashMap<u64, <N::File as File>::Reader>,
     next_read_handle: u64,
 
-    readdir_handles: HashMap<u64, Vec<(String, E, u64)>>,
+    readdir_handles: HashMap<u64, Vec<(String, Node2<N>, u64)>>,
     next_readdir_handle: u64,
 }
 
-impl<'a, E> FS<'a, E>
+impl<'a, N> FS<N>
 where
-    E: Node<'a>,
+    N: NodeType,
 {
-    pub fn new(root: E) -> FS<'a, E> {
+    pub fn new(root: N) -> Self {
         let mut nodes = HashMap::new();
-        nodes.insert(INO_ROOT, root);
+        nodes.insert(INO_ROOT, Node2::Directory(root.root()));
         FS {
             nodes,
             read_handles: HashMap::new(),
@@ -48,9 +49,9 @@ where
     }
 }
 
-impl<'a, E> fuse::Filesystem for FS<'a, E>
+impl<N> fuse::Filesystem for FS<N>
 where
-    E: Node<'a>,
+    N: NodeType,
 {
     fn init(&mut self, _req: &fuse::Request) -> Result<(), os::raw::c_int> {
         trace!("fuse init");
@@ -80,7 +81,10 @@ where
                     return;
                 }
             };
-            match parent.child_by_name(&name) {
+            let dir = parent
+                .directory()
+                .expect("can not call lookup on a non-directory");
+            match dir.file_by_name(&name) {
                 Ok(v) => v,
                 Err(err) => {
                     if err.errno() != libc::ENOENT {
@@ -91,9 +95,20 @@ where
                 }
             }
         };
+
         let child_ino = inode_for_child(parent_ino, &name);
-        let attrs = child.file_attributes(child_ino);
+
+        let attrs = match attrs_for_file(&child, child_ino) {
+            Ok(v) => v,
+            Err(err) => {
+                error!("fuse: can not get attrs for {}: {}", child_ino, err);
+                reply.error(err.errno());
+                return;
+            }
+        };
+
         self.nodes.insert(child_ino, child);
+
         let now = time::now().to_timespec();
         reply.entry(&now, &attrs, 0);
     }
@@ -101,8 +116,15 @@ where
     fn getattr(&mut self, _req: &fuse::Request, ino: u64, reply: fuse::ReplyAttr) {
         trace!("fuse getattr: {}", ino);
 
-        if let Some(entry) = self.nodes.get(&ino) {
-            let attrs = entry.file_attributes(ino);
+        if let Some(node) = self.nodes.get(&ino) {
+            let attrs = match attrs_for_file(&node, ino) {
+                Ok(v) => v,
+                Err(err) => {
+                    error!("fuse: can not get attrs for {}: {}", ino, err);
+                    reply.error(err.errno());
+                    return;
+                }
+            };
             let ttl = (time::now() + time::Duration::seconds(30)).to_timespec();
             reply.attr(&ttl, &attrs);
         } else {
@@ -112,13 +134,15 @@ where
 
     fn readlink(&mut self, _req: &fuse::Request, ino: u64, reply: fuse::ReplyData) {
         trace!("fuse readlink: ino={}", ino);
-        if let Some(entry) = self.nodes.get(&ino) {
-            let path = match entry.read_link() {
+
+        if let Some(node) = self.nodes.get(&ino) {
+            let symlink = node
+                .symlink()
+                .expect("can not call readlink on a non-symlink");
+            let path = match symlink.read_link() {
                 Ok(v) => v,
                 Err(err) => {
-                    if err.errno() != libc::ENOENT {
-                        error!("fuse: could not read symlink: {}", err);
-                    }
+                    error!("fuse: could not read symlink: {}", err);
                     reply.error(err.errno());
                     return;
                 }
@@ -139,7 +163,7 @@ where
             return;
         }
 
-        let entry = match self.nodes.get(&ino) {
+        let node = match self.nodes.get(&ino) {
             Some(v) => v,
             None => {
                 error!("fuse: no such inode: {}", ino);
@@ -147,7 +171,8 @@ where
                 return;
             }
         };
-        let reader = match entry.open_ro() {
+        let file = node.file().expect("can not call open on a non-file");
+        let reader = match file.open_ro() {
             Ok(v) => v,
             Err(err) => {
                 error!("fuse: could not read inode {}: {}", ino, err);
@@ -240,15 +265,18 @@ where
         trace!("fuse opendir: {}, {}", parent_ino, flags);
 
         let children = {
-            let entry = match self.nodes.get(&parent_ino) {
-                Some(entry) => entry,
+            let node = match self.nodes.get(&parent_ino) {
+                Some(v) => v,
                 None => {
                     error!("fuse: no entry for inode {}", parent_ino);
                     reply.error(libc::ENOENT);
                     return;
                 }
             };
-            match entry.children() {
+            let dir = node
+                .directory()
+                .expect("can not call lookup on a non-directory");
+            match dir.files() {
                 Ok(v) => v,
                 Err(err) => {
                     error!(
@@ -297,9 +325,9 @@ where
         };
 
         let iter = entries.iter().skip(offset as usize).enumerate();
-        for (i, (name, entry, ino)) in iter {
-            let typ = entry.file_attributes(*ino).kind;
-            trace!("fuse readdir entry: {} {:?}, {}", ino, typ, name);
+        for (i, (name, node, ino)) in iter {
+            let typ = filetype_for_node(&node);
+            trace!("fuse readdir node: {} {:?}, {}", ino, typ, name);
             if reply.add(*ino, offset + i as i64 + 1, typ, name) {
                 break;
             }
@@ -520,4 +548,42 @@ fn inode_for_child(parent_ino: u64, name: &str) -> u64 {
     parent_ino.hash(&mut s);
     name.hash(&mut s);
     s.finish()
+}
+
+fn filetype_for_node<N: NodeType>(node: &Node2<N>) -> fuse::FileType {
+    match node {
+        Node2::File(_) => fuse::FileType::RegularFile,
+        Node2::Directory(_) => fuse::FileType::Directory,
+        Node2::Symlink(_) => fuse::FileType::Symlink,
+    }
+}
+
+fn timespec_from_datetime(t: &DateTime<Utc>) -> time::Timespec {
+    time::Timespec::new(t.timestamp(), t.timestamp_subsec_nanos() as i32)
+}
+
+fn attrs_for_file<N: NodeType>(node: &Node2<N>, ino: u64) -> Result<fuse::FileAttr, N::Error> {
+    const BLOCK_SIZE: u64 = 1024;
+
+    let meta = node.metadata()?;
+    let size = match node {
+        Node2::File(f) => f.size()?,
+        _ => 0,
+    };
+    Ok(fuse::FileAttr {
+        ino,
+        size,
+        blocks: size / BLOCK_SIZE,
+        atime: timespec_from_datetime(&meta.mtime),
+        mtime: timespec_from_datetime(&meta.mtime),
+        ctime: timespec_from_datetime(&meta.ctime),
+        crtime: timespec_from_datetime(&meta.ctime),
+        kind: filetype_for_node(&node),
+        perm: meta.perm,
+        nlink: 1,
+        uid: meta.uid,
+        gid: meta.gid,
+        rdev: 0,
+        flags: 0,
+    })
 }

@@ -80,10 +80,10 @@ fn main() {
     };
 
     let username = cli.value_of("user").unwrap();
-    let fs = FS::new(NodeCache::new(Entry::Users {
+    let fs = FS::new(Root {
         sc_client: &sc_client,
-        show: vec![username.to_string()],
-    }));
+        username: username.to_string(),
+    });
     let path = cli.value_of("path").unwrap();
     fuse::mount(fs, &path, &[]).unwrap();
 }

@@ -1,23 +1,22 @@
 use super::*;
-use crate::ioutil::*;
+use chrono::{DateTime, Utc};
 use failure::Fail;
 use std::iter::Iterator;
 use std::path::PathBuf;
-use time::Timespec;
 
-pub trait Node<'a>: Sized {
-    type Error: Error;
-
-    fn file_attributes(&self, ino: u64) -> fuse::FileAttr;
-
-    fn open_ro(&self) -> Result<Box<ReadSeek + 'a>, Self::Error>;
-
-    fn children(&self) -> Result<Vec<(String, Self)>, Self::Error>;
-
-    fn child_by_name(&self, name: &str) -> Result<Self, Self::Error>;
-
-    fn read_link(&self) -> Result<PathBuf, Self::Error>;
-}
+//pub trait Node<'a>: Sized {
+//    type Error: Error;
+//
+//    fn file_attributes(&self, ino: u64) -> fuse::FileAttr;
+//
+//    fn open_ro(&self) -> Result<Box<ReadSeek + 'a>, Self::Error>;
+//
+//    fn children(&self) -> Result<Vec<(String, Self)>, Self::Error>;
+//
+//    fn child_by_name(&self, name: &str) -> Result<Self, Self::Error>;
+//
+//    fn read_link(&self) -> Result<PathBuf, Self::Error>;
+//}
 
 pub trait Error: Fail {
     fn not_found() -> Self;
@@ -26,8 +25,8 @@ pub trait Error: Fail {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Metadata {
-    pub mtime: Timespec,
-    pub ctime: Timespec,
+    pub mtime: DateTime<Utc>,
+    pub ctime: DateTime<Utc>,
     pub perm: u16,
     pub uid: u32,
     pub gid: u32,
@@ -65,12 +64,37 @@ pub trait NodeType {
     type File: File<Error = Self::Error>;
     type Directory: Directory<Self, Error = Self::Error>;
     type Symlink: Symlink<Error = Self::Error>;
+
+    fn root(&self) -> Self::Directory;
 }
 
 pub enum Node2<T: NodeType + ?Sized> {
     File(T::File),
     Directory(T::Directory),
     Symlink(T::Symlink),
+}
+
+impl<T: NodeType> Node2<T> {
+    pub fn file(&self) -> Option<&T::File> {
+        match self {
+            Node2::File(ref f) => Some(f),
+            _ => None,
+        }
+    }
+
+    pub fn directory(&self) -> Option<&T::Directory> {
+        match self {
+            Node2::Directory(ref f) => Some(f),
+            _ => None,
+        }
+    }
+
+    pub fn symlink(&self) -> Option<&T::Symlink> {
+        match self {
+            Node2::Symlink(ref f) => Some(f),
+            _ => None,
+        }
+    }
 }
 
 impl<T: NodeType> Meta for Node2<T> {
