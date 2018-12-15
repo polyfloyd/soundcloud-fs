@@ -97,7 +97,7 @@ impl filesystem::Meta for Dir<'_> {
 }
 
 impl<'a> filesystem::Directory<Root<'a>> for Dir<'a> {
-    fn files(&self) -> Result<Vec<(String, filesystem::Node2<Root<'a>>)>, Self::Error> {
+    fn files(&self) -> Result<Vec<(String, filesystem::Node<Root<'a>>)>, Self::Error> {
         match self {
             Dir::UserList(f) => f.files(),
             Dir::UserProfile(f) => f.files(),
@@ -106,7 +106,7 @@ impl<'a> filesystem::Directory<Root<'a>> for Dir<'a> {
         }
     }
 
-    fn file_by_name(&self, name: &str) -> Result<filesystem::Node2<Root<'a>>, Self::Error> {
+    fn file_by_name(&self, name: &str) -> Result<filesystem::Node<Root<'a>>, Self::Error> {
         match self {
             Dir::UserList(f) => f.file_by_name(name),
             Dir::UserProfile(f) => f.file_by_name(name),
@@ -143,11 +143,11 @@ impl filesystem::Meta for UserList<'_> {
 }
 
 impl<'a> filesystem::Directory<Root<'a>> for UserList<'a> {
-    fn files(&self) -> Result<Vec<(String, filesystem::Node2<Root<'a>>)>, Self::Error> {
+    fn files(&self) -> Result<Vec<(String, filesystem::Node<Root<'a>>)>, Self::Error> {
         self.show
             .iter()
             .map(|name| {
-                let entry = filesystem::Node2::Directory(Dir::UserProfile(UserProfile {
+                let entry = filesystem::Node::Directory(Dir::UserProfile(UserProfile {
                     user: soundcloud::User::by_name(&self.sc_client, name)?,
                     recurse: true,
                 }));
@@ -156,7 +156,7 @@ impl<'a> filesystem::Directory<Root<'a>> for UserList<'a> {
             .collect()
     }
 
-    fn file_by_name(&self, name: &str) -> Result<filesystem::Node2<Root<'a>>, Self::Error> {
+    fn file_by_name(&self, name: &str) -> Result<filesystem::Node<Root<'a>>, Self::Error> {
         match name {
             "autorun.inf" | "BDMV" => {
                 return Err(Error::ChildNotFound);
@@ -166,7 +166,7 @@ impl<'a> filesystem::Directory<Root<'a>> for UserList<'a> {
             }
             _ => (),
         }
-        let entry = filesystem::Node2::Directory(Dir::UserProfile(UserProfile {
+        let entry = filesystem::Node::Directory(Dir::UserProfile(UserProfile {
             user: soundcloud::User::by_name(&self.sc_client, name)?,
             recurse: self.show.iter().any(|n| n == name),
         }));
@@ -193,7 +193,7 @@ impl filesystem::Meta for UserFavorites<'_> {
 }
 
 impl<'a> filesystem::Directory<Root<'a>> for UserFavorites<'a> {
-    fn files(&self) -> Result<Vec<(String, filesystem::Node2<Root<'a>>)>, Self::Error> {
+    fn files(&self) -> Result<Vec<(String, filesystem::Node<Root<'a>>)>, Self::Error> {
         let files: Vec<_> = self
             .user
             .favorites()?
@@ -201,7 +201,7 @@ impl<'a> filesystem::Directory<Root<'a>> for UserFavorites<'a> {
             .map(|track| {
                 (
                     format!("{}_-_{}.mp3", track.user.permalink, track.permalink),
-                    filesystem::Node2::File(TrackAudio { track }),
+                    filesystem::Node::File(TrackAudio { track }),
                 )
             })
             .collect();
@@ -228,7 +228,7 @@ impl filesystem::Meta for UserFollowing<'_> {
 }
 
 impl<'a> filesystem::Directory<Root<'a>> for UserFollowing<'a> {
-    fn files(&self) -> Result<Vec<(String, filesystem::Node2<Root<'a>>)>, Self::Error> {
+    fn files(&self) -> Result<Vec<(String, filesystem::Node<Root<'a>>)>, Self::Error> {
         let files: Vec<_> = self
             .user
             .following()?
@@ -236,7 +236,7 @@ impl<'a> filesystem::Directory<Root<'a>> for UserFollowing<'a> {
             .map(|user| {
                 (
                     user.permalink.clone(),
-                    filesystem::Node2::Symlink(UserReference { user }),
+                    filesystem::Node::Symlink(UserReference { user }),
                 )
             })
             .collect();
@@ -265,18 +265,18 @@ impl filesystem::Meta for UserProfile<'_> {
 }
 
 impl<'a> filesystem::Directory<Root<'a>> for UserProfile<'a> {
-    fn files(&self) -> Result<Vec<(String, filesystem::Node2<Root<'a>>)>, Self::Error> {
+    fn files(&self) -> Result<Vec<(String, filesystem::Node<Root<'a>>)>, Self::Error> {
         let mut files = Vec::new();
         if self.recurse {
             files.push((
                 "favorites".to_string(),
-                filesystem::Node2::Directory(Dir::UserFavorites(UserFavorites {
+                filesystem::Node::Directory(Dir::UserFavorites(UserFavorites {
                     user: self.user.clone(),
                 })),
             ));
             files.push((
                 "following".to_string(),
-                filesystem::Node2::Directory(Dir::UserFollowing(UserFollowing {
+                filesystem::Node::Directory(Dir::UserFollowing(UserFollowing {
                     user: self.user.clone(),
                 })),
             ));
@@ -284,7 +284,7 @@ impl<'a> filesystem::Directory<Root<'a>> for UserProfile<'a> {
         let tracks = self.user.tracks()?.into_iter().map(|track| {
             (
                 format!("{}.mp3", track.permalink),
-                filesystem::Node2::File(TrackAudio { track }),
+                filesystem::Node::File(TrackAudio { track }),
             )
         });
         files.extend(tracks);

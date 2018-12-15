@@ -23,12 +23,12 @@ pub struct FS<N>
 where
     N: NodeType,
 {
-    nodes: HashMap<u64, Node2<N>>,
+    nodes: HashMap<u64, Node<N>>,
 
     read_handles: HashMap<u64, <N::File as File>::Reader>,
     next_read_handle: u64,
 
-    readdir_handles: HashMap<u64, Vec<(String, Node2<N>, u64)>>,
+    readdir_handles: HashMap<u64, Vec<(String, Node<N>, u64)>>,
     next_readdir_handle: u64,
 }
 
@@ -36,9 +36,9 @@ impl<'a, N> FS<N>
 where
     N: NodeType,
 {
-    pub fn new(root: N) -> Self {
+    pub fn new(root: &N) -> Self {
         let mut nodes = HashMap::new();
-        nodes.insert(INO_ROOT, Node2::Directory(root.root()));
+        nodes.insert(INO_ROOT, Node::Directory(root.root()));
         FS {
             nodes,
             read_handles: HashMap::new(),
@@ -550,11 +550,11 @@ fn inode_for_child(parent_ino: u64, name: &str) -> u64 {
     s.finish()
 }
 
-fn filetype_for_node<N: NodeType>(node: &Node2<N>) -> fuse::FileType {
+fn filetype_for_node<N: NodeType>(node: &Node<N>) -> fuse::FileType {
     match node {
-        Node2::File(_) => fuse::FileType::RegularFile,
-        Node2::Directory(_) => fuse::FileType::Directory,
-        Node2::Symlink(_) => fuse::FileType::Symlink,
+        Node::File(_) => fuse::FileType::RegularFile,
+        Node::Directory(_) => fuse::FileType::Directory,
+        Node::Symlink(_) => fuse::FileType::Symlink,
     }
 }
 
@@ -562,12 +562,12 @@ fn timespec_from_datetime(t: &DateTime<Utc>) -> time::Timespec {
     time::Timespec::new(t.timestamp(), t.timestamp_subsec_nanos() as i32)
 }
 
-fn attrs_for_file<N: NodeType>(node: &Node2<N>, ino: u64) -> Result<fuse::FileAttr, N::Error> {
+fn attrs_for_file<N: NodeType>(node: &Node<N>, ino: u64) -> Result<fuse::FileAttr, N::Error> {
     const BLOCK_SIZE: u64 = 1024;
 
     let meta = node.metadata()?;
     let size = match node {
-        Node2::File(f) => f.size()?,
+        Node::File(f) => f.size()?,
         _ => 0,
     };
     Ok(fuse::FileAttr {

@@ -20,7 +20,7 @@ where
     N::Directory: Clone,
     N::Symlink: Clone,
 {
-    pub fn new(inner: N) -> Self {
+    pub fn new(inner: &N) -> Self {
         CacheRoot {
             root: DirCache::new(inner.root()),
         }
@@ -53,8 +53,8 @@ where
     N::Symlink: Clone,
 {
     inner: N::Directory,
-    cached_files: RefCell<Option<Vec<(String, Node2<CacheRoot<N>>)>>>,
-    hidden_cached_files: RefCell<HashMap<String, Node2<CacheRoot<N>>>>,
+    cached_files: RefCell<Option<Vec<(String, Node<CacheRoot<N>>)>>>,
+    hidden_cached_files: RefCell<HashMap<String, Node<CacheRoot<N>>>>,
     non_files: RefCell<HashSet<String>>,
 }
 
@@ -95,7 +95,7 @@ where
     N::Directory: Clone,
     N::Symlink: Clone,
 {
-    fn files(&self) -> Result<Vec<(String, Node2<CacheRoot<N>>)>, Self::Error> {
+    fn files(&self) -> Result<Vec<(String, Node<CacheRoot<N>>)>, Self::Error> {
         let mut cached = self.cached_files.borrow_mut();
         if cached.is_some() {
             return Ok(cached.as_ref().unwrap().to_vec());
@@ -110,7 +110,7 @@ where
         Ok(files)
     }
 
-    fn file_by_name(&self, name: &str) -> Result<Node2<CacheRoot<N>>, Self::Error> {
+    fn file_by_name(&self, name: &str) -> Result<Node<CacheRoot<N>>, Self::Error> {
         if self.non_files.borrow().contains(name) {
             return Err(Self::Error::not_found());
         }
@@ -150,7 +150,7 @@ where
     }
 }
 
-fn map_node<N>(node: Node2<N>) -> Node2<CacheRoot<N>>
+fn map_node<N>(node: Node<N>) -> Node<CacheRoot<N>>
 where
     N: NodeType + Clone,
     N::File: Clone,
@@ -158,8 +158,8 @@ where
     N::Symlink: Clone,
 {
     match node {
-        Node2::File(f) => Node2::File(f),
-        Node2::Directory(f) => Node2::Directory(DirCache::new(f)),
-        Node2::Symlink(f) => Node2::Symlink(f),
+        Node::File(f) => Node::File(f),
+        Node::Directory(f) => Node::Directory(DirCache::new(f)),
+        Node::Symlink(f) => Node::Symlink(f),
     }
 }

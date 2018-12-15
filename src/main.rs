@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 #[macro_use]
 extern crate failure_derive;
 
@@ -84,7 +86,7 @@ fn main() {
         sc_client: &sc_client,
         username: username.to_string(),
     };
-    let fs = FS::new(CacheRoot::new(root));
+    let fs = FS::new(&CacheRoot::new(&root));
     let path = cli.value_of("path").unwrap();
     fuse::mount(fs, &path, &[]).unwrap();
 }

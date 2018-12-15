@@ -30,14 +30,14 @@ pub trait File: Meta {
 }
 
 pub trait Directory<N: NodeType + ?Sized>: Meta {
-    fn files(&self) -> Result<Vec<(String, Node2<N>)>, Self::Error>;
+    fn files(&self) -> Result<Vec<(String, Node<N>)>, Self::Error>;
 
-    fn file_by_name(&self, name: &str) -> Result<Node2<N>, Self::Error> {
+    fn file_by_name(&self, name: &str) -> Result<Node<N>, Self::Error> {
         self.files()?
             .into_iter()
             .find(|(n, _)| n == name)
             .map(|(_, entry)| entry)
-            .ok_or_else(|| Self::Error::not_found())
+            .ok_or_else(Self::Error::not_found)
     }
 }
 
@@ -55,42 +55,42 @@ pub trait NodeType {
 }
 
 #[derive(Clone)]
-pub enum Node2<T: NodeType + ?Sized> {
+pub enum Node<T: NodeType + ?Sized> {
     File(T::File),
     Directory(T::Directory),
     Symlink(T::Symlink),
 }
 
-impl<T: NodeType> Node2<T> {
+impl<T: NodeType> Node<T> {
     pub fn file(&self) -> Option<&T::File> {
         match self {
-            Node2::File(ref f) => Some(f),
+            Node::File(ref f) => Some(f),
             _ => None,
         }
     }
 
     pub fn directory(&self) -> Option<&T::Directory> {
         match self {
-            Node2::Directory(ref f) => Some(f),
+            Node::Directory(ref f) => Some(f),
             _ => None,
         }
     }
 
     pub fn symlink(&self) -> Option<&T::Symlink> {
         match self {
-            Node2::Symlink(ref f) => Some(f),
+            Node::Symlink(ref f) => Some(f),
             _ => None,
         }
     }
 }
 
-impl<T: NodeType> Meta for Node2<T> {
+impl<T: NodeType> Meta for Node<T> {
     type Error = T::Error;
     fn metadata(&self) -> Result<Metadata, Self::Error> {
         match self {
-            Node2::File(f) => f.metadata(),
-            Node2::Directory(f) => f.metadata(),
-            Node2::Symlink(f) => f.metadata(),
+            Node::File(f) => f.metadata(),
+            Node::Directory(f) => f.metadata(),
+            Node::Symlink(f) => f.metadata(),
         }
     }
 }
