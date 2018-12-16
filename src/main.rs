@@ -11,6 +11,7 @@ mod mp3;
 use self::filesystem::*;
 use self::mapping::*;
 use log::*;
+use std::ffi::OsStr;
 use std::process;
 
 fn main() {
@@ -92,5 +93,6 @@ fn main() {
 
     let fs = FS::new(&CacheRoot::new(&root), uid, gid);
     let path = cli.value_of("path").unwrap();
-    fuse::mount(fs, &path, &[]).unwrap();
+    let options = &[OsStr::new("-oallow_other"), OsStr::new("-oauto_unmount")];
+    fuse::mount(fs, &path, options).unwrap();
 }
