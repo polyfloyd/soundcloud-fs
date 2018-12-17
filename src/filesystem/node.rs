@@ -27,7 +27,7 @@ pub trait File: Meta {
     fn size(&self) -> Result<u64, Self::Error>;
 }
 
-pub trait Directory<N: NodeType + ?Sized>: Meta {
+pub trait Directory<N: NodeType>: Meta {
     fn files(&self) -> Result<Vec<(String, Node<N>)>, Self::Error>;
 
     fn file_by_name(&self, name: &str) -> Result<Node<N>, Self::Error> {
@@ -43,7 +43,7 @@ pub trait Symlink: Meta {
     fn read_link(&self) -> Result<PathBuf, Self::Error>;
 }
 
-pub trait NodeType {
+pub trait NodeType: Sized {
     type Error: Error;
     type File: File<Error = Self::Error>;
     type Directory: Directory<Self, Error = Self::Error>;
@@ -53,7 +53,7 @@ pub trait NodeType {
 }
 
 #[derive(Clone)]
-pub enum Node<T: NodeType + ?Sized> {
+pub enum Node<T: NodeType> {
     File(T::File),
     Directory(T::Directory),
     Symlink(T::Symlink),
