@@ -5,7 +5,7 @@ use reqwest::Method;
 use std::hash::{Hash, Hasher};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct User<'a> {
+pub struct User {
     /// Integer ID
     pub id: i64,
     /// Permalink of the resource, e.g. "sbahn-sounds"
@@ -57,32 +57,21 @@ pub struct User<'a> {
     pub private_playlists_count: Option<i64>,
     // Boolean if email is confirmed
     pub primary_email_confirmed: Option<bool>,
-
-    #[serde(skip_deserializing, skip_serializing)]
-    client: Option<&'a Client>,
 }
 
-impl<'a> User<'a> {
+impl User {
     pub fn by_name(client: &Client, name: impl AsRef<str>) -> Result<User, Error> {
-        let mut rs: Result<User, _> = client.query(
+        client.query(
             Method::GET,
             format!("https://api.soundcloud.com/users/{}", name.as_ref()),
-        );
-        if let Ok(ref mut u) = rs {
-            u.client = Some(client);
-        }
-        rs
+        )
     }
 
     pub fn me(client: &Client) -> Result<User, Error> {
-        let mut rs: Result<User, _> = client.query(Method::GET, "https://api.soundcloud.com/me");
-        if let Ok(ref mut u) = rs {
-            u.client = Some(client);
-        }
-        rs
+        client.query(Method::GET, "https://api.soundcloud.com/me")
     }
 
-    pub fn tracks(&self) -> Result<Vec<Track<'a>>, Error> {
+    pub fn tracks(&self, client: &Client) -> Result<Vec<Track>, Error> {
         let mut tracks = Vec::new();
 
         let mut next_url = Some(format!(
@@ -90,18 +79,14 @@ impl<'a> User<'a> {
             self.id
         ));
         while let Some(url) = next_url.take() {
-            let page: Page<Track> = self.client.unwrap().query(Method::GET, url)?;
+            let page: Page<Track> = client.query(Method::GET, url)?;
             tracks.extend(page.collection);
             next_url = page.next_href;
-        }
-
-        for track in &mut tracks {
-            track.client = self.client;
         }
         Ok(tracks)
     }
 
-    pub fn favorites(&self) -> Result<Vec<Track<'a>>, Error> {
+    pub fn favorites(&self, client: &Client) -> Result<Vec<Track>, Error> {
         let mut tracks = Vec::new();
 
         let mut next_url = Some(format!(
@@ -109,18 +94,14 @@ impl<'a> User<'a> {
             self.id
         ));
         while let Some(url) = next_url.take() {
-            let page: Page<Track> = self.client.unwrap().query(Method::GET, url)?;
+            let page: Page<Track> = client.query(Method::GET, url)?;
             tracks.extend(page.collection);
             next_url = page.next_href;
-        }
-
-        for track in &mut tracks {
-            track.client = self.client;
         }
         Ok(tracks)
     }
 
-    pub fn following(&self) -> Result<Vec<User<'a>>, Error> {
+    pub fn following(&self, client: &Client) -> Result<Vec<User>, Error> {
         let mut users = Vec::new();
 
         let mut next_url = Some(format!(
@@ -128,19 +109,15 @@ impl<'a> User<'a> {
             self.id
         ));
         while let Some(url) = next_url.take() {
-            let page: Page<User> = self.client.unwrap().query(Method::GET, url)?;
+            let page: Page<User> = client.query(Method::GET, url)?;
             users.extend(page.collection);
             next_url = page.next_href;
-        }
-
-        for user in &mut users {
-            user.client = self.client;
         }
         Ok(users)
     }
 }
 
-impl Hash for User<'_> {
+impl Hash for User {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id.hash(state);
     }

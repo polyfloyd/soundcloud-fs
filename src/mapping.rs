@@ -68,7 +68,7 @@ impl<'a> filesystem::NodeType for Root<'a> {
     type Error = Error;
     type File = TrackAudio<'a>;
     type Directory = Dir<'a>;
-    type Symlink = UserReference<'a>;
+    type Symlink = UserReference;
 
     fn root(&self) -> Self::Directory {
         let show = vec![self.username.clone()];
@@ -146,6 +146,7 @@ impl<'a> filesystem::Directory<Root<'a>> for UserList<'a> {
                 let entry = filesystem::Node::Directory(Dir::UserProfile(UserProfile {
                     user: soundcloud::User::by_name(&self.sc_client, name)?,
                     recurse: true,
+                    sc_client: self.sc_client,
                 }));
                 Ok((name.clone(), entry))
             })
@@ -165,6 +166,7 @@ impl<'a> filesystem::Directory<Root<'a>> for UserList<'a> {
         let entry = filesystem::Node::Directory(Dir::UserProfile(UserProfile {
             user: soundcloud::User::by_name(&self.sc_client, name)?,
             recurse: self.show.iter().any(|n| n == name),
+            sc_client: self.sc_client,
         }));
         Ok(entry)
     }
@@ -172,7 +174,8 @@ impl<'a> filesystem::Directory<Root<'a>> for UserList<'a> {
 
 #[derive(Clone)]
 pub struct UserFavorites<'a> {
-    user: soundcloud::User<'a>,
+    user: soundcloud::User,
+    sc_client: &'a soundcloud::Client,
 }
 
 impl filesystem::Meta for UserFavorites<'_> {
@@ -190,12 +193,15 @@ impl<'a> filesystem::Directory<Root<'a>> for UserFavorites<'a> {
     fn files(&self) -> Result<Vec<(String, filesystem::Node<Root<'a>>)>, Self::Error> {
         let files: Vec<_> = self
             .user
-            .favorites()?
+            .favorites(&self.sc_client)?
             .into_iter()
             .map(|track| {
                 (
                     format!("{}_-_{}.mp3", track.user.permalink, track.permalink),
-                    filesystem::Node::File(TrackAudio { track }),
+                    filesystem::Node::File(TrackAudio {
+                        track,
+                        sc_client: self.sc_client,
+                    }),
                 )
             })
             .collect();
@@ -205,7 +211,8 @@ impl<'a> filesystem::Directory<Root<'a>> for UserFavorites<'a> {
 
 #[derive(Clone)]
 pub struct UserFollowing<'a> {
-    user: soundcloud::User<'a>,
+    user: soundcloud::User,
+    sc_client: &'a soundcloud::Client,
 }
 
 impl filesystem::Meta for UserFollowing<'_> {
@@ -223,7 +230,7 @@ impl<'a> filesystem::Directory<Root<'a>> for UserFollowing<'a> {
     fn files(&self) -> Result<Vec<(String, filesystem::Node<Root<'a>>)>, Self::Error> {
         let files: Vec<_> = self
             .user
-            .following()?
+            .following(&self.sc_client)?
             .into_iter()
             .map(|user| {
                 (
@@ -238,9 +245,10 @@ impl<'a> filesystem::Directory<Root<'a>> for UserFollowing<'a> {
 
 #[derive(Clone)]
 pub struct UserProfile<'a> {
-    user: soundcloud::User<'a>,
+    user: soundcloud::User,
     // Only add child directories for users marked for recursing, to prevent recursing too deeply.
     recurse: bool,
+    sc_client: &'a soundcloud::Client,
 }
 
 impl filesystem::Meta for UserProfile<'_> {
@@ -262,19 +270,24 @@ impl<'a> filesystem::Directory<Root<'a>> for UserProfile<'a> {
                 "favorites".to_string(),
                 filesystem::Node::Directory(Dir::UserFavorites(UserFavorites {
                     user: self.user.clone(),
+                    sc_client: self.sc_client,
                 })),
             ));
             files.push((
                 "following".to_string(),
                 filesystem::Node::Directory(Dir::UserFollowing(UserFollowing {
                     user: self.user.clone(),
+                    sc_client: self.sc_client,
                 })),
             ));
         }
-        let tracks = self.user.tracks()?.into_iter().map(|track| {
+        let tracks = self.user.tracks(&self.sc_client)?.into_iter().map(|track| {
             (
                 format!("{}.mp3", track.permalink),
-                filesystem::Node::File(TrackAudio { track }),
+                filesystem::Node::File(TrackAudio {
+                    track,
+                    sc_client: self.sc_client,
+                }),
             )
         });
         files.extend(tracks);
@@ -284,7 +297,8 @@ impl<'a> filesystem::Directory<Root<'a>> for UserProfile<'a> {
 
 #[derive(Clone)]
 pub struct TrackAudio<'a> {
-    track: soundcloud::Track<'a>,
+    track: soundcloud::Track,
+    sc_client: &'a soundcloud::Client,
 }
 
 impl filesystem::Meta for TrackAudio<'_> {
@@ -302,7 +316,7 @@ impl<'a> filesystem::File for TrackAudio<'a> {
     type Reader = Concat<Box<ReadSeek + 'a>>;
 
     fn open_ro(&self) -> Result<Self::Reader, Self::Error> {
-        let id3_tag = self.track.id3_tag()?;
+        let id3_tag = self.track.id3_tag(&self.sc_client)?;
 
         let remote_mp3_size = self.track.audio_size() as u64;
         let padding_len = mp3::zero_headers(1).len() as u64;
@@ -325,9 +339,10 @@ impl<'a> filesystem::File for TrackAudio<'a> {
         let padding_end = mp3::zero_headers(PADDING_END);
 
         let track_cp = self.track.clone();
+        let sc_client_cp = self.sc_client;
         let audio = LazyOpen::with_size_hint(remote_mp3_size, move || {
             let f = track_cp
-                .audio()
+                .audio(sc_client_cp)
                 .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{}", err)))?;
             Ok(Skip::new(f, first_frame_size))
         });
@@ -344,7 +359,7 @@ impl<'a> filesystem::File for TrackAudio<'a> {
 
     fn size(&self) -> Result<u64, Self::Error> {
         let id3_tag_size = {
-            let mut b = self.track.id3_tag()?;
+            let mut b = self.track.id3_tag(&self.sc_client)?;
             b.seek(io::SeekFrom::End(0)).unwrap()
         };
         let mp3_size = {
@@ -356,11 +371,11 @@ impl<'a> filesystem::File for TrackAudio<'a> {
 }
 
 #[derive(Clone)]
-pub struct UserReference<'a> {
-    user: soundcloud::User<'a>,
+pub struct UserReference {
+    user: soundcloud::User,
 }
 
-impl filesystem::Meta for UserReference<'_> {
+impl filesystem::Meta for UserReference {
     type Error = Error;
     fn metadata(&self) -> Result<filesystem::Metadata, Self::Error> {
         Ok(filesystem::Metadata {
@@ -371,7 +386,7 @@ impl filesystem::Meta for UserReference<'_> {
     }
 }
 
-impl filesystem::Symlink for UserReference<'_> {
+impl filesystem::Symlink for UserReference {
     fn read_link(&self) -> Result<PathBuf, Self::Error> {
         Ok(["..", "..", &self.user.permalink].iter().collect())
     }

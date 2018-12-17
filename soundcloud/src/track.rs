@@ -9,7 +9,7 @@ use std::io;
 const AUDIO_CBR_BITRATE: u64 = 128_000;
 
 #[derive(Clone, Debug, Deserialize)]
-pub struct Track<'a> {
+pub struct Track {
     pub id: i64,
     #[serde(with = "date_format")]
     pub created_at: DateTime<Utc>,
@@ -69,11 +69,9 @@ pub struct Track<'a> {
     //"reposts_count": 0,
     //"policy": "ALLOW",
     //"monetization_model": "NOT_APPLICABLE"
-    #[serde(skip_deserializing, skip_serializing)]
-    pub(crate) client: Option<&'a Client>,
 }
 
-impl<'a> Track<'a> {
+impl Track {
     pub fn download_format(&self) -> &str {
         if self.download_url.is_none() {
             return "mp3";
@@ -85,21 +83,19 @@ impl<'a> Track<'a> {
         }
     }
 
-    pub fn download(&self) -> Result<impl io::Read + io::Seek + 'a, Error> {
-        let sc_client = self.client.unwrap();
+    pub fn download<'a>(&self, client: &'a Client) -> Result<impl io::Read + io::Seek + 'a, Error> {
         if let Some(ref raw_url) = self.download_url {
-            let (req_builder, _) = sc_client.request(Method::GET, Url::parse(raw_url)?)?;
+            let (req_builder, _) = client.request(Method::GET, Url::parse(raw_url)?)?;
             let req = req_builder.build()?;
-            Ok(http::RangeSeeker::new(&sc_client.client, req))
+            Ok(http::RangeSeeker::new(&client.client, req))
         } else {
             Err(Error::DownloadNotAvailable)
         }
     }
 
-    pub fn audio(&self) -> Result<impl io::Read + io::Seek + 'a, Error> {
-        let sc_client = self.client.unwrap();
+    pub fn audio<'a>(&self, client: &'a Client) -> Result<impl io::Read + io::Seek + 'a, Error> {
         let raw_url = format!("https://api.soundcloud.com/i1/tracks/{}/streams", self.id);
-        let streams: StreamInfo = sc_client.query(Method::GET, &raw_url)?;
+        let streams: StreamInfo = client.query(Method::GET, &raw_url)?;
         let req = default_client()
             .request(Method::GET, Url::parse(&streams.http_mp3_128_url)?)
             .build()?;
@@ -110,7 +106,7 @@ impl<'a> Track<'a> {
         self.duration_ms as u64 * AUDIO_CBR_BITRATE / 1000 / 8
     }
 
-    pub fn id3_tag(&self) -> Result<impl io::Read + io::Seek, Error> {
+    pub fn id3_tag(&self, client: &Client) -> Result<impl io::Read + io::Seek, Error> {
         let mut tag = id3::Tag::new();
 
         tag.set_artist(self.user.username.as_str());
@@ -145,7 +141,7 @@ impl<'a> Track<'a> {
             tag.set_text("TSRC", isrc.as_str());
         }
 
-        let enable_image = self.client.as_ref().unwrap().config.id3_download_images;
+        let enable_image = client.config.id3_download_images;
         if let Some(ref url) = self.artwork_url.as_ref().filter(|_| enable_image) {
             // "large.jpg" is actually a 100x100 image. We can tweak the URL to point to a larger
             // image instead.
@@ -182,7 +178,7 @@ impl<'a> Track<'a> {
     }
 }
 
-impl Hash for Track<'_> {
+impl Hash for Track {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id.hash(state);
     }
