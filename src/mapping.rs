@@ -71,7 +71,11 @@ impl<'a> filesystem::NodeType for Root<'a> {
     type Symlink = UserReference<'a>;
 
     fn root(&self) -> Self::Directory {
-        let root = UserList::new(&self.sc_client, vec![self.username.clone()]);
+        let show = vec![self.username.clone()];
+        let root = UserList {
+            sc_client: &self.sc_client,
+            show,
+        };
         Dir::UserList(root)
     }
 }
@@ -120,12 +124,6 @@ impl<'a> filesystem::Directory<Root<'a>> for Dir<'a> {
 pub struct UserList<'a> {
     sc_client: &'a soundcloud::Client,
     show: Vec<String>,
-}
-
-impl<'a> UserList<'a> {
-    pub fn new(sc_client: &'a soundcloud::Client, show: Vec<String>) -> Self {
-        UserList { sc_client, show }
-    }
 }
 
 impl filesystem::Meta for UserList<'_> {
