@@ -4,7 +4,7 @@ use reqwest::StatusCode;
 use std::io;
 use std::mem;
 
-enum RangeSeekerState {
+enum State {
     NoResponse,
     Response(Box<reqwest::Response>),
     OutOfRange,
@@ -15,7 +15,7 @@ pub struct RangeSeeker<'a> {
     req: reqwest::Request,
     num_requests: u64,
 
-    state: RangeSeekerState,
+    state: State,
     current_offset: u64,
     content_length: Option<u64>,
 
@@ -29,7 +29,7 @@ impl<'a> RangeSeeker<'a> {
             client,
             req,
             num_requests: 0,
-            state: RangeSeekerState::NoResponse,
+            state: State::NoResponse,
             current_offset: 0,
             content_length: None,
             response_cache: None,
@@ -60,7 +60,7 @@ impl<'a> RangeSeeker<'a> {
             let o = self.current_offset;
             self.current_offset = 0;
             self.next_resp()?;
-            self.state = RangeSeekerState::OutOfRange;
+            self.state = State::OutOfRange;
             self.current_offset = o;
             return Ok(());
         }
@@ -79,11 +79,11 @@ impl<'a> RangeSeeker<'a> {
                 )
             })?;
             self.content_length = Some(self.current_offset + clen);
-            self.state = RangeSeekerState::Response(Box::new(res));
+            self.state = State::Response(Box::new(res));
             return Ok(());
         }
 
-        self.state = RangeSeekerState::NoResponse;
+        self.state = State::NoResponse;
         Err(io::Error::new(
             io::ErrorKind::Other,
             format!(
@@ -105,12 +105,12 @@ impl<'a> io::Read for RangeSeeker<'a> {
             }
         }
 
-        if let RangeSeekerState::NoResponse = self.state {
+        if let State::NoResponse = self.state {
             self.next_resp()?;
         }
         let res = match self.state {
-            RangeSeekerState::Response(ref mut res) => res,
-            RangeSeekerState::OutOfRange => {
+            State::Response(ref mut res) => res,
+            State::OutOfRange => {
                 return Ok(0);
             }
             _ => unreachable!(),
@@ -144,9 +144,9 @@ impl<'a> io::Seek for RangeSeeker<'a> {
             // io::SeekFrom::End(0) should seek to the end of the stream and causes no more bytes
             // to be read after this. We add this special case to avoid a needless HTTP request to
             // an empty body.
-            RangeSeekerState::OutOfRange
+            State::OutOfRange
         } else {
-            RangeSeekerState::NoResponse
+            State::NoResponse
         };
 
         if self.current_offset != abs_offset {
@@ -155,13 +155,13 @@ impl<'a> io::Seek for RangeSeeker<'a> {
             mem::swap(&mut self.state, &mut new_state);
             let previous_offset = self.current_offset;
             let previous_response = match new_state {
-                RangeSeekerState::Response(res) => Some(res),
+                State::Response(res) => Some(res),
                 _ => None,
             };
             // If we have a cached response that has the same absolute offset as desired, reuse it.
             if self.response_cache.as_ref().map(|(_, o)| *o) == Some(abs_offset) {
                 let (cached_response, _) = self.response_cache.take().unwrap();
-                self.state = RangeSeekerState::Response(cached_response);
+                self.state = State::Response(cached_response);
             }
             // Cache the old response so we can reuse it later.
             if let Some(res) = previous_response {
