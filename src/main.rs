@@ -83,15 +83,13 @@ fn main() {
     };
 
     let username = cli.value_of("user").unwrap();
-    let root = Root {
-        sc_client: &sc_client,
-        username: username.to_string(),
-    };
+    let show = vec![username.to_string()];
+    let root = RootState { sc_client, show };
 
     let uid = nix::unistd::Uid::current().as_raw() as u32;
     let gid = nix::unistd::Gid::current().as_raw() as u32;
 
-    let fs = FS::new(&CacheRoot::new(&root), uid, gid);
+    let fs = FS::new(&CacheRoot::new(&Root::new(&root)), uid, gid);
     let path = cli.value_of("path").unwrap();
     let options = &[OsStr::new("-oallow_other"), OsStr::new("-oauto_unmount")];
     fuse::mount(fs, &path, options).unwrap();

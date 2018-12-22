@@ -58,10 +58,22 @@ impl From<id3::Error> for Error {
     }
 }
 
+// TODO: Use proper lifetimes to share state and make this private.
+#[derive(Clone)]
+pub struct RootState {
+    pub sc_client: soundcloud::Client,
+    pub show: Vec<String>,
+}
+
 #[derive(Clone)]
 pub struct Root<'a> {
-    pub sc_client: &'a soundcloud::Client,
-    pub username: String,
+    inner: &'a RootState,
+}
+
+impl<'a> Root<'a> {
+    pub fn new(inner: &'a RootState) -> Self {
+        Root { inner }
+    }
 }
 
 impl<'a> filesystem::NodeType for Root<'a> {
@@ -71,12 +83,7 @@ impl<'a> filesystem::NodeType for Root<'a> {
     type Symlink = UserReference;
 
     fn root(&self) -> Self::Directory {
-        let show = vec![self.username.clone()];
-        let root = UserList {
-            sc_client: &self.sc_client,
-            show,
-        };
-        Dir::UserList(root)
+        Dir::UserList(UserList { inner: &self.inner })
     }
 }
 
@@ -122,8 +129,7 @@ impl<'a> filesystem::Directory<Root<'a>> for Dir<'a> {
 
 #[derive(Clone)]
 pub struct UserList<'a> {
-    sc_client: &'a soundcloud::Client,
-    show: Vec<String>,
+    inner: &'a RootState,
 }
 
 impl filesystem::Meta for UserList<'_> {
@@ -140,13 +146,14 @@ impl filesystem::Meta for UserList<'_> {
 
 impl<'a> filesystem::Directory<Root<'a>> for UserList<'a> {
     fn files(&self) -> Result<Vec<(String, filesystem::Node<Root<'a>>)>, Self::Error> {
-        self.show
+        self.inner
+            .show
             .iter()
             .map(|name| {
                 let entry = filesystem::Node::Directory(Dir::UserProfile(UserProfile {
-                    user: soundcloud::User::by_name(&self.sc_client, name)?,
+                    inner: &self.inner,
+                    user: soundcloud::User::by_name(&self.inner.sc_client, name)?,
                     recurse: true,
-                    sc_client: self.sc_client,
                 }));
                 Ok((name.clone(), entry))
             })
@@ -164,9 +171,9 @@ impl<'a> filesystem::Directory<Root<'a>> for UserList<'a> {
             _ => (),
         }
         let entry = filesystem::Node::Directory(Dir::UserProfile(UserProfile {
-            user: soundcloud::User::by_name(&self.sc_client, name)?,
-            recurse: self.show.iter().any(|n| n == name),
-            sc_client: self.sc_client,
+            inner: &self.inner,
+            user: soundcloud::User::by_name(&self.inner.sc_client, name)?,
+            recurse: self.inner.show.iter().any(|n| n == name),
         }));
         Ok(entry)
     }
@@ -174,8 +181,8 @@ impl<'a> filesystem::Directory<Root<'a>> for UserList<'a> {
 
 #[derive(Clone)]
 pub struct UserFavorites<'a> {
+    inner: &'a RootState,
     user: soundcloud::User,
-    sc_client: &'a soundcloud::Client,
 }
 
 impl filesystem::Meta for UserFavorites<'_> {
@@ -193,14 +200,14 @@ impl<'a> filesystem::Directory<Root<'a>> for UserFavorites<'a> {
     fn files(&self) -> Result<Vec<(String, filesystem::Node<Root<'a>>)>, Self::Error> {
         let files: Vec<_> = self
             .user
-            .favorites(&self.sc_client)?
+            .favorites(&self.inner.sc_client)?
             .into_iter()
             .map(|track| {
                 (
                     format!("{}_-_{}.mp3", track.user.permalink, track.permalink),
                     filesystem::Node::File(TrackAudio {
+                        inner: self.inner,
                         track,
-                        sc_client: self.sc_client,
                     }),
                 )
             })
@@ -211,8 +218,8 @@ impl<'a> filesystem::Directory<Root<'a>> for UserFavorites<'a> {
 
 #[derive(Clone)]
 pub struct UserFollowing<'a> {
+    inner: &'a RootState,
     user: soundcloud::User,
-    sc_client: &'a soundcloud::Client,
 }
 
 impl filesystem::Meta for UserFollowing<'_> {
@@ -230,7 +237,7 @@ impl<'a> filesystem::Directory<Root<'a>> for UserFollowing<'a> {
     fn files(&self) -> Result<Vec<(String, filesystem::Node<Root<'a>>)>, Self::Error> {
         let files: Vec<_> = self
             .user
-            .following(&self.sc_client)?
+            .following(&self.inner.sc_client)?
             .into_iter()
             .map(|user| {
                 (
@@ -245,10 +252,10 @@ impl<'a> filesystem::Directory<Root<'a>> for UserFollowing<'a> {
 
 #[derive(Clone)]
 pub struct UserProfile<'a> {
+    inner: &'a RootState,
     user: soundcloud::User,
     // Only add child directories for users marked for recursing, to prevent recursing too deeply.
     recurse: bool,
-    sc_client: &'a soundcloud::Client,
 }
 
 impl filesystem::Meta for UserProfile<'_> {
@@ -270,26 +277,30 @@ impl<'a> filesystem::Directory<Root<'a>> for UserProfile<'a> {
                 "favorites".to_string(),
                 filesystem::Node::Directory(Dir::UserFavorites(UserFavorites {
                     user: self.user.clone(),
-                    sc_client: self.sc_client,
+                    inner: self.inner,
                 })),
             ));
             files.push((
                 "following".to_string(),
                 filesystem::Node::Directory(Dir::UserFollowing(UserFollowing {
+                    inner: self.inner,
                     user: self.user.clone(),
-                    sc_client: self.sc_client,
                 })),
             ));
         }
-        let tracks = self.user.tracks(&self.sc_client)?.into_iter().map(|track| {
-            (
-                format!("{}.mp3", track.permalink),
-                filesystem::Node::File(TrackAudio {
-                    track,
-                    sc_client: self.sc_client,
-                }),
-            )
-        });
+        let tracks = self
+            .user
+            .tracks(&self.inner.sc_client)?
+            .into_iter()
+            .map(|track| {
+                (
+                    format!("{}.mp3", track.permalink),
+                    filesystem::Node::File(TrackAudio {
+                        inner: self.inner,
+                        track,
+                    }),
+                )
+            });
         files.extend(tracks);
         Ok(files)
     }
@@ -297,8 +308,8 @@ impl<'a> filesystem::Directory<Root<'a>> for UserProfile<'a> {
 
 #[derive(Clone)]
 pub struct TrackAudio<'a> {
+    inner: &'a RootState,
     track: soundcloud::Track,
-    sc_client: &'a soundcloud::Client,
 }
 
 impl filesystem::Meta for TrackAudio<'_> {
@@ -316,7 +327,7 @@ impl<'a> filesystem::File for TrackAudio<'a> {
     type Reader = Concat<Box<ReadSeek + 'a>>;
 
     fn open_ro(&self) -> Result<Self::Reader, Self::Error> {
-        let id3_tag = self.track.id3_tag(&self.sc_client)?;
+        let id3_tag = self.track.id3_tag(&self.inner.sc_client)?;
 
         let remote_mp3_size = self.track.audio_size() as u64;
         let padding_len = mp3::zero_headers(1).len() as u64;
@@ -339,7 +350,7 @@ impl<'a> filesystem::File for TrackAudio<'a> {
         let padding_end = mp3::zero_headers(PADDING_END);
 
         let track_cp = self.track.clone();
-        let sc_client_cp = self.sc_client;
+        let sc_client_cp = &self.inner.sc_client;
         let audio = LazyOpen::with_size_hint(remote_mp3_size, move || {
             let f = track_cp
                 .audio(sc_client_cp)
@@ -359,7 +370,7 @@ impl<'a> filesystem::File for TrackAudio<'a> {
 
     fn size(&self) -> Result<u64, Self::Error> {
         let id3_tag_size = {
-            let mut b = self.track.id3_tag(&self.sc_client)?;
+            let mut b = self.track.id3_tag(&self.inner.sc_client)?;
             b.seek(io::SeekFrom::End(0)).unwrap()
         };
         let mp3_size = {
