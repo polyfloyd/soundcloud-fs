@@ -72,48 +72,18 @@ impl User {
     }
 
     pub fn tracks(&self, client: &Client) -> Result<Vec<Track>, Error> {
-        let mut tracks = Vec::new();
-
-        let mut next_url = Some(format!(
-            "https://api.soundcloud.com/users/{}/tracks?linked_partitioning=1&limit=200",
-            self.id
-        ));
-        while let Some(url) = next_url.take() {
-            let page: Page<Track> = client.query(Method::GET, url)?;
-            tracks.extend(page.collection);
-            next_url = page.next_href;
-        }
-        Ok(tracks)
+        let url = format!("https://api.soundcloud.com/users/{}/tracks", self.id);
+        Page::all(client, url)
     }
 
     pub fn favorites(&self, client: &Client) -> Result<Vec<Track>, Error> {
-        let mut tracks = Vec::new();
-
-        let mut next_url = Some(format!(
-            "https://api.soundcloud.com/users/{}/favorites?linked_partitioning=1&limit=200",
-            self.id
-        ));
-        while let Some(url) = next_url.take() {
-            let page: Page<Track> = client.query(Method::GET, url)?;
-            tracks.extend(page.collection);
-            next_url = page.next_href;
-        }
-        Ok(tracks)
+        let url = format!("https://api.soundcloud.com/users/{}/favorites", self.id);
+        Page::all(client, url)
     }
 
     pub fn following(&self, client: &Client) -> Result<Vec<User>, Error> {
-        let mut users = Vec::new();
-
-        let mut next_url = Some(format!(
-            "https://api.soundcloud.com/users/{}/followings?linked_partitioning=1",
-            self.id
-        ));
-        while let Some(url) = next_url.take() {
-            let page: Page<User> = client.query(Method::GET, url)?;
-            users.extend(page.collection);
-            next_url = page.next_href;
-        }
-        Ok(users)
+        let url = format!("https://api.soundcloud.com/users/{}/followings", self.id);
+        Page::all(client, url)
     }
 }
 

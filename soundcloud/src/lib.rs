@@ -12,7 +12,7 @@ extern crate serde_derive;
 use lazy_static::lazy_static;
 use log::*;
 use regex::bytes::Regex;
-use reqwest::{header, Url};
+use reqwest::{header, Method, Url};
 use serde::de::DeserializeOwned;
 use std::fmt;
 use std::str;
@@ -243,4 +243,25 @@ struct Session {
 struct Page<T> {
     collection: Vec<T>,
     next_href: Option<String>,
+}
+
+impl<T: DeserializeOwned> Page<T> {
+    fn all(client: &Client, base_url: impl AsRef<str>) -> Result<Vec<T>, Error> {
+        let mut items = Vec::new();
+        let mut next_url = Some(Url::parse_with_params(
+            base_url.as_ref(),
+            &[("linked_partitioning", "1"), ("limit", "200")],
+        )?);
+
+        while let Some(url) = next_url.take() {
+            let page: Page<T> = client.query(Method::GET, url)?;
+            items.extend(page.collection);
+            next_url = match page.next_href {
+                Some(s) => Some(s.parse()?),
+                None => None,
+            };
+        }
+
+        Ok(items)
+    }
 }
