@@ -11,6 +11,7 @@ extern crate serde_derive;
 
 use lazy_static::lazy_static;
 use log::*;
+use rayon::prelude::*;
 use regex::bytes::Regex;
 use reqwest::{header, Method, Url};
 use serde::de::DeserializeOwned;
@@ -22,6 +23,7 @@ pub use self::track::Track;
 pub use self::user::User;
 
 const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64; rv:63.0) Gecko/20100101 Firefox/63.0";
+const PAGE_MAX_SIZE: u64 = 200;
 
 pub(crate) fn default_headers() -> header::HeaderMap {
     let mut headers = header::HeaderMap::new();
@@ -242,26 +244,36 @@ struct Session {
 #[derive(Deserialize)]
 struct Page<T> {
     collection: Vec<T>,
-    next_href: Option<String>,
 }
 
-impl<T: DeserializeOwned> Page<T> {
-    fn all(client: &Client, base_url: impl AsRef<str>) -> Result<Vec<T>, Error> {
-        let mut items = Vec::new();
-        let mut next_url = Some(Url::parse_with_params(
-            base_url.as_ref(),
-            &[("linked_partitioning", "1"), ("limit", "200")],
-        )?);
+impl<T: DeserializeOwned + Send> Page<T> {
+    fn all_with_size_hint(
+        client: &Client,
+        base_url: impl AsRef<str>,
+        count_hint: u64,
+    ) -> Result<Vec<T>, Error> {
+        let urls: Result<Vec<Url>, _> = (0..=count_hint / PAGE_MAX_SIZE)
+            .map(|num| -> Result<_, _> {
+                Url::parse_with_params(
+                    base_url.as_ref(),
+                    &[
+                        ("linked_partitioning", "1"),
+                        ("limit", "200"),
+                        ("offset", &format!("{}", num * PAGE_MAX_SIZE)),
+                    ],
+                )
+            })
+            .collect();
 
-        while let Some(url) = next_url.take() {
-            let page: Page<T> = client.query(Method::GET, url)?;
-            items.extend(page.collection);
-            next_url = match page.next_href {
-                Some(s) => Some(s.parse()?),
-                None => None,
-            };
-        }
+        let pages: Result<Vec<Page<T>>, Error> = urls?
+            .into_par_iter()
+            .map(|url| client.query(Method::GET, url))
+            .collect();
 
-        Ok(items)
+        let all: Vec<_> = pages?
+            .into_iter()
+            .flat_map(|page| page.collection)
+            .collect();
+        Ok(all)
     }
 }

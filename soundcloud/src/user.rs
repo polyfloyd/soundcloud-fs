@@ -73,17 +73,17 @@ impl User {
 
     pub fn tracks(&self, client: &Client) -> Result<Vec<Track>, Error> {
         let url = format!("https://api.soundcloud.com/users/{}/tracks", self.id);
-        Page::all(client, url)
+        Page::all_with_size_hint(client, url, self.track_count as u64)
     }
 
     pub fn favorites(&self, client: &Client) -> Result<Vec<Track>, Error> {
         let url = format!("https://api.soundcloud.com/users/{}/favorites", self.id);
-        Page::all(client, url)
+        Page::all_with_size_hint(client, url, self.public_favorites_count as u64)
     }
 
     pub fn following(&self, client: &Client) -> Result<Vec<User>, Error> {
         let url = format!("https://api.soundcloud.com/users/{}/followings", self.id);
-        Page::all(client, url)
+        Page::all_with_size_hint(client, url, self.followings_count as u64)
     }
 }
 
