@@ -34,6 +34,7 @@ fn main() {
                 .long("user")
                 .takes_value(true)
                 .required(true)
+                .multiple(true)
                 .help("Sets the user to create directory and file entries for"),
         ).arg(
             clap::Arg::with_name("login")
@@ -82,9 +83,10 @@ fn main() {
         }
     };
 
-    let username = cli.value_of("user").unwrap();
-    let show = vec![username.to_string()];
-    let root = RootState { sc_client, show };
+    let root = RootState {
+        sc_client,
+        show: cli.values_of("user").unwrap().map(str::to_string).collect(),
+    };
 
     let uid = nix::unistd::Uid::current().as_raw() as u32;
     let gid = nix::unistd::Gid::current().as_raw() as u32;
