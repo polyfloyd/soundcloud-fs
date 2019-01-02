@@ -46,7 +46,7 @@ pub struct Track {
     #[serde(deserialize_with = "empty_str_as_none")]
     pub isrc: Option<String>,
     pub video_url: Option<String>,
-    pub bpm: Option<i32>,
+    pub bpm: Option<f32>,
     pub release_year: Option<i32>,
     pub release_month: Option<i32>,
     pub release_day: Option<i32>,
@@ -132,7 +132,7 @@ impl Track {
             tag.set_genre(genre.as_str());
         }
         if let Some(bpm) = self.bpm {
-            tag.set_text("TBPM", format!("{}", bpm));
+            tag.set_text("TBPM", format!("{}", bpm.round()));
         }
         if let Some(ref label) = self.label_name {
             tag.set_text("TPUB", label.as_str());
