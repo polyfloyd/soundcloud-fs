@@ -1,4 +1,7 @@
+use crate::ioutil;
 use byteorder::{BigEndian, ByteOrder};
+use lazy_static::lazy_static;
+use std::io;
 
 const FRAMES_FLAG: u32 = 0x0000_0001;
 const BYTES_FLAG: u32 = 0x0000_0002;
@@ -6,6 +9,18 @@ const BYTES_FLAG: u32 = 0x0000_0002;
 //const VBR_SCALE_FLAG: u32 = 0x0000_0008;
 
 const MEAN_FRAME_SIZE: u64 = 417;
+
+lazy_static! {
+    pub static ref ZERO_FRAME: [u8; MEAN_FRAME_SIZE as usize] = {
+        let mut buf = [0; MEAN_FRAME_SIZE as usize];
+        buf[0x00..0x04].copy_from_slice(&[0xff, 0xfb, 0x90, 0x64]);
+        buf
+    };
+}
+
+pub fn zero_frames(count: u64) -> impl io::Read + io::Seek {
+    ioutil::Pattern::new(&ZERO_FRAME[..], ZERO_FRAME.len() as u64 * count)
+}
 
 pub fn cbr_header(bytes: u64) -> Vec<u8> {
     let mut buf = vec![0; 417];
@@ -49,16 +64,6 @@ pub fn cbr_header(bytes: u64) -> Vec<u8> {
 fn copy_from_var_str(buf: &mut [u8], s: &str) {
     let b = s.as_bytes();
     buf[..b.len()].copy_from_slice(b);
-}
-
-pub fn zero_headers(count: u64) -> Vec<u8> {
-    (0..count)
-        .flat_map(|_| {
-            let mut buf = vec![0; MEAN_FRAME_SIZE as usize];
-            buf[0x00..0x04].copy_from_slice(&[0xff, 0xfb, 0x90, 0x64]);
-            buf
-        })
-        .collect()
 }
 
 // 00000000: fffb 9064 0000 0000 0000 0000 0000 0000  ...d............

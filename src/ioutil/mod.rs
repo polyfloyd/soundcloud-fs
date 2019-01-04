@@ -1,5 +1,6 @@
 mod concat;
 mod lazyopen;
+mod pattern;
 mod readseek;
 mod skip;
 
@@ -8,6 +9,7 @@ mod oprecorder;
 
 pub use self::concat::*;
 pub use self::lazyopen::*;
+pub use self::pattern::*;
 pub use self::readseek::*;
 pub use self::skip::*;
 

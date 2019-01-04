@@ -330,7 +330,7 @@ impl<'a> filesystem::File for TrackAudio<'a> {
         let id3_tag = self.track.id3_tag(&self.inner.sc_client)?;
 
         let remote_mp3_size = self.track.audio_size() as u64;
-        let padding_len = mp3::zero_headers(1).len() as u64;
+        let padding_len = mp3::ZERO_FRAME.len() as u64;
         let mp3_total_size =
             remote_mp3_size + PADDING_START * padding_len + PADDING_END * padding_len;
         let mp3_header = mp3::cbr_header(mp3_total_size);
@@ -344,10 +344,10 @@ impl<'a> filesystem::File for TrackAudio<'a> {
         // still be accessed. To counter this, we jam a very large swath of zero bytes in
         // between the metadata and audio stream to saturate the read buffer without the
         // audio stream.
-        let padding_start = mp3::zero_headers(PADDING_START);
+        let padding_start = mp3::zero_frames(PADDING_START);
         // We also need some padding at the end for players that try to
         // read ID3v1 metadata.
-        let padding_end = mp3::zero_headers(PADDING_END);
+        let padding_end = mp3::zero_frames(PADDING_END);
 
         let track_cp = self.track.clone();
         let sc_client_cp = &self.inner.sc_client;
@@ -361,9 +361,9 @@ impl<'a> filesystem::File for TrackAudio<'a> {
         let concat = Concat::new(vec![
             Box::<ReadSeek>::from(Box::new(id3_tag)),
             Box::<ReadSeek>::from(Box::new(io::Cursor::new(mp3_header))),
-            Box::<ReadSeek>::from(Box::new(io::Cursor::new(padding_start))),
+            Box::<ReadSeek>::from(Box::new(padding_start)),
             Box::<ReadSeek>::from(Box::new(audio)),
-            Box::<ReadSeek>::from(Box::new(io::Cursor::new(padding_end))),
+            Box::<ReadSeek>::from(Box::new(padding_end)),
         ]);
         Ok(concat)
     }
@@ -374,7 +374,7 @@ impl<'a> filesystem::File for TrackAudio<'a> {
             b.seek(io::SeekFrom::End(0)).unwrap()
         };
         let mp3_size = {
-            let padding_len = mp3::zero_headers(1).len() as u64;
+            let padding_len = mp3::ZERO_FRAME.len() as u64;
             self.track.audio_size() as u64 + PADDING_START * padding_len + PADDING_END * padding_len
         };
         Ok(id3_tag_size + mp3_size)
