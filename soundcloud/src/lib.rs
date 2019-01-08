@@ -218,7 +218,7 @@ struct PasswordLoginReqBody<'a> {
     client_id: &'a str,
     scope: &'a str,
     recaptcha_pubkey: &'a str,
-    recaptcha_response: Option<String>,
+    recaptcha_response: Option<&'a str>,
     credentials: Credentials<'a>,
     signature: &'a str,
     device_id: &'a str,
@@ -258,7 +258,7 @@ impl<T: DeserializeOwned + Send> Page<T> {
                     base_url.as_ref(),
                     &[
                         ("linked_partitioning", "1"),
-                        ("limit", "200"),
+                        ("limit", &format!("{}", PAGE_MAX_SIZE)),
                         ("offset", &format!("{}", num * PAGE_MAX_SIZE)),
                     ],
                 )
