@@ -87,6 +87,10 @@ impl<'a> filesystem::NodeType for Root<'a> {
     }
 }
 
+// Clippy complains about a large size difference in the enum variants. This is because the
+// UserList is the only variant that does not has a user field. The warning has been silenced
+// because the UserList variant will only be instantiated once.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 pub enum Dir<'a> {
     UserList(UserList<'a>),
