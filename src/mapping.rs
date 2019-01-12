@@ -1,4 +1,5 @@
 use crate::filesystem;
+use crate::id3tag::tag_for_track;
 use crate::ioutil::{Concat, LazyOpen, ReadSeek, Skip};
 use crate::mp3;
 use chrono::Utc;
@@ -63,6 +64,7 @@ impl From<id3::Error> for Error {
 pub struct RootState {
     pub sc_client: soundcloud::Client,
     pub show: Vec<String>,
+    pub id3_download_images: bool,
 }
 
 #[derive(Clone)]
@@ -331,7 +333,7 @@ impl<'a> filesystem::File for TrackAudio<'a> {
     type Reader = Concat<Box<ReadSeek + 'a>>;
 
     fn open_ro(&self) -> Result<Self::Reader, Self::Error> {
-        let id3_tag = self.track.id3_tag(&self.inner.sc_client)?;
+        let id3_tag = tag_for_track(&self.track, self.inner.id3_download_images)?;
 
         let remote_mp3_size = self.track.audio_size() as u64;
         let padding_len = mp3::ZERO_FRAME.len() as u64;
@@ -374,7 +376,7 @@ impl<'a> filesystem::File for TrackAudio<'a> {
 
     fn size(&self) -> Result<u64, Self::Error> {
         let id3_tag_size = {
-            let mut b = self.track.id3_tag(&self.inner.sc_client)?;
+            let mut b = tag_for_track(&self.track, self.inner.id3_download_images)?;
             b.seek(io::SeekFrom::End(0)).unwrap()
         };
         let mp3_size = {

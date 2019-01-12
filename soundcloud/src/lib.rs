@@ -52,18 +52,11 @@ pub(crate) fn default_client() -> &'static reqwest::Client {
     &DEFAULT_CLIENT
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct Config {
-    pub id3_download_images: bool,
-}
-
 #[derive(Clone)]
 pub struct Client {
     client: reqwest::Client,
     client_id: String,
     token: Option<String>,
-
-    pub(crate) config: Config,
 }
 
 impl Client {
@@ -71,11 +64,7 @@ impl Client {
     /// application.
     ///
     /// This login method is not guaranteed to be stable!
-    pub fn login(
-        config: Config,
-        username: impl AsRef<str>,
-        password: impl AsRef<str>,
-    ) -> Result<Client, Error> {
+    pub fn login(username: impl AsRef<str>, password: impl AsRef<str>) -> Result<Client, Error> {
         let client = default_client();
         let client_id = anonymous_client_id(&client)?;
 
@@ -109,26 +98,21 @@ impl Client {
         };
 
         trace!("SoundCloud login got token: {}****", &token[0..4]);
-        Client::from_token(config, client_id, token)
+        Client::from_token(client_id, token)
     }
 
     // Attempt to create a client with read-only access to the public API.
-    pub fn anonymous(config: Config) -> Result<Client, Error> {
+    pub fn anonymous() -> Result<Client, Error> {
         let client = default_client();
         let client_id = anonymous_client_id(&client)?;
         Ok(Client {
             client: client.clone(),
             client_id,
             token: None,
-            config,
         })
     }
 
-    fn from_token(
-        config: Config,
-        client_id: impl Into<String>,
-        token: impl Into<String>,
-    ) -> Result<Client, Error> {
+    fn from_token(client_id: impl Into<String>, token: impl Into<String>) -> Result<Client, Error> {
         let token = token.into();
         let auth_client = reqwest::Client::builder()
             .default_headers({
@@ -142,7 +126,6 @@ impl Client {
             client: auth_client,
             client_id: client_id.into(),
             token: Some(token),
-            config,
         })
     }
 

@@ -10,6 +10,9 @@ pub enum Error {
     #[fail(display = "client has no token")]
     NoToken,
 
+    #[fail(display = "artwork not available")]
+    ArtworkNotAvailable,
+
     #[fail(display = "downlaod not available")]
     DownloadNotAvailable,
 

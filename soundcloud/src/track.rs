@@ -1,6 +1,6 @@
 use crate::util::http;
 use crate::*;
-use chrono::{DateTime, Datelike, Utc};
+use chrono::{DateTime, Utc};
 use reqwest::{Method, Url};
 use serde::{Deserialize, Deserializer};
 use std::hash::{Hash, Hasher};
@@ -58,7 +58,7 @@ pub struct Track {
     //"user_playback_count": 1,
     //"user_favorite": true,
     pub permalink_url: String,
-    pub artwork_url: Option<String>,
+    artwork_url: Option<String>,
     //"waveform_url": "https://w1.sndcdn.com/17huh4rFYXFb_m.png",
     //"stream_url": "https://api.soundcloud.com/tracks/515639547/stream",
     //"playback_count": 0,
@@ -106,75 +106,32 @@ impl Track {
         self.duration_ms as u64 * AUDIO_CBR_BITRATE / 1000 / 8
     }
 
-    pub fn id3_tag(&self, client: &Client) -> Result<impl io::Read + io::Seek, Error> {
-        let mut tag = id3::Tag::new();
+    pub fn artwork(&self) -> Result<(Vec<u8>, String), Error> {
+        let url = match &self.artwork_url {
+            Some(v) => v,
+            None => return Err(Error::ArtworkNotAvailable),
+        };
 
-        tag.set_artist(self.user.username.as_str());
-        tag.set_title(self.title.as_str());
-        tag.set_duration(self.duration_ms as u32);
-        tag.set_text("TCOP", self.license.as_str());
-        tag.add_frame(id3::Frame::with_content(
-            "WOAF",
-            id3::Content::Link(self.permalink_url.to_string()),
-        ));
-        tag.add_frame(id3::Frame::with_content(
-            "WOAR",
-            id3::Content::Link(self.user.permalink_url.to_string()),
-        ));
-        tag.set_year(
-            self.release_year
-                .unwrap_or_else(|| self.created_at.date().year()),
-        );
-        if let Some(year) = self.release_year {
-            tag.set_text("TORY", format!("{}", year));
-        }
-        if let Some(ref genre) = self.genre {
-            tag.set_genre(genre.as_str());
-        }
-        if let Some(bpm) = self.bpm {
-            tag.set_text("TBPM", format!("{}", bpm.round()));
-        }
-        if let Some(ref label) = self.label_name {
-            tag.set_text("TPUB", label.as_str());
-        }
-        if let Some(ref isrc) = self.isrc {
-            tag.set_text("TSRC", isrc.as_str());
-        }
+        // "large.jpg" is actually a 100x100 image. We can tweak the URL to point to a larger
+        // image instead.
+        let url = if url.ends_with("-large.jpg") {
+            format!("{}-t500x500.jpg", url.trim_end_matches("-large.jpg"))
+        } else {
+            url.to_string()
+        };
 
-        let enable_image = client.config.id3_download_images;
-        if let Some(ref url) = self.artwork_url.as_ref().filter(|_| enable_image) {
-            // "large.jpg" is actually a 100x100 image. We can tweak the URL to point to a larger
-            // image instead.
-            let url = if url.ends_with("-large.jpg") {
-                format!("{}-t500x500.jpg", url.trim_end_matches("-large.jpg"))
-            } else {
-                url.to_string()
-            };
+        info!("querying GET {}", url);
+        let mut resp = default_client().get(&url).send()?.error_for_status()?;
 
-            info!("querying GET {}", url);
-            let mut resp = default_client().get(&url).send()?.error_for_status()?;
-
-            let mime_type = resp
-                .headers()
-                .get(header::CONTENT_TYPE)
-                .and_then(|h| h.to_str().ok())
-                .map(|h| h.to_string())
-                .unwrap_or_else(|| "image/jpg".to_string());
-            let mut data = Vec::new();
-            resp.copy_to(&mut data)?;
-
-            tag.add_picture(id3::frame::Picture {
-                mime_type,
-                picture_type: id3::frame::PictureType::CoverFront,
-                description: "Artwork".to_string(),
-                data,
-            })
-        }
-
-        let mut id3_tag_buf = Vec::new();
-        tag.write_to(&mut id3_tag_buf, id3::Version::Id3v24)
-            .unwrap();
-        Ok(io::Cursor::new(id3_tag_buf))
+        let mime_type = resp
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .and_then(|h| h.to_str().ok())
+            .map(|h| h.to_string())
+            .unwrap_or_else(|| "image/jpg".to_string());
+        let mut data = Vec::new();
+        resp.copy_to(&mut data)?;
+        Ok((data, mime_type))
     }
 }
 

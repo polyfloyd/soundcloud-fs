@@ -4,6 +4,7 @@
 extern crate failure_derive;
 
 mod filesystem;
+mod id3tag;
 mod ioutil;
 mod mapping;
 mod mp3;
@@ -55,10 +56,6 @@ fn main() {
                 .help("Enables image metadata in ID3 tags. This will incur an additional HTTP request everytime a file is opened for reading"),
         ).get_matches();
 
-    let sc_config = soundcloud::Config {
-        id3_download_images: cli.value_of("id3-images") == Some("1"),
-    };
-
     let login = cli.value_of("login").and_then(|s| {
         let mut i = s.splitn(2, ':');
         let u = i.next().unwrap();
@@ -67,11 +64,11 @@ fn main() {
     let sc_client_rs = match login {
         None => {
             info!("creating anonymous client");
-            soundcloud::Client::anonymous(sc_config)
+            soundcloud::Client::anonymous()
         }
         Some((username, password)) => {
             info!("logging in as {}", username);
-            soundcloud::Client::login(sc_config, &username, password)
+            soundcloud::Client::login(&username, password)
         }
     };
 
@@ -86,6 +83,7 @@ fn main() {
     let root = RootState {
         sc_client,
         show: cli.values_of("user").unwrap().map(str::to_string).collect(),
+        id3_download_images: cli.value_of("id3-images") == Some("1"),
     };
 
     let uid = nix::unistd::Uid::current().as_raw() as u32;
