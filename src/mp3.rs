@@ -1,5 +1,4 @@
 use crate::ioutil;
-use byteorder::{BigEndian, ByteOrder};
 use lazy_static::lazy_static;
 use std::io;
 
@@ -33,7 +32,7 @@ pub fn cbr_header(bytes: u64) -> Vec<u8> {
 
     // Header flags.
     let flags = FRAMES_FLAG | BYTES_FLAG;
-    BigEndian::write_u32(&mut buf[0x28..0x2c], flags);
+    buf[0x28..0x2c].copy_from_slice(&flags.to_be_bytes());
 
     // 0x34..0x98: Table of contents used for seeking. Not relevant for CBR.
 
@@ -41,13 +40,13 @@ pub fn cbr_header(bytes: u64) -> Vec<u8> {
     if flags & FRAMES_FLAG != 0 {
         let frames = bytes / MEAN_FRAME_SIZE;
         assert!(frames <= u64::from(std::u32::MAX));
-        BigEndian::write_u32(&mut buf[0x2c..0x30], frames as u32);
+        buf[0x2c..0x30].copy_from_slice(&(frames as u32).to_be_bytes());
     }
 
     // The filesize in bytes.
     if flags & BYTES_FLAG != 0 {
         assert!(bytes <= u64::from(std::u32::MAX));
-        BigEndian::write_u32(&mut buf[0x30..0x34], bytes as u32);
+        buf[0x30..0x34].copy_from_slice(&(bytes as u32).to_be_bytes());
     }
 
     // 0x34..0x38: VBR scale, whatever that is.
