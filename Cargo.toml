@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 chrono = "0.4"
-clap = "2.32"
+clap = "2"
 env_logger = "0.6"
 failure = "0.1"
 failure_derive = "0.1"
@@ -15,7 +15,7 @@ id3 = "0.2"
 lazy_static = "1"
 libc = "0.2"
 log = "0.4"
-nix = "0.12"
+nix = "0.13"
 soundcloud = { path = "./soundcloud" }
 time = "0.1"
 
