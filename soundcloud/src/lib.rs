@@ -22,7 +22,7 @@ pub use self::error::Error;
 pub use self::track::Track;
 pub use self::user::User;
 
-const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64; rv:63.0) Gecko/20100101 Firefox/63.0";
+const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64; rv:65.0) Gecko/20100101 Firefox/65.0";
 const PAGE_MAX_SIZE: u64 = 200;
 
 pub(crate) fn default_headers() -> header::HeaderMap {
@@ -180,16 +180,33 @@ impl fmt::Debug for Client {
 
 fn anonymous_client_id(client: &reqwest::Client) -> Result<String, Error> {
     lazy_static! {
+        static ref RE_SCRIPT_TAG: Regex =
+            Regex::new("<script crossorigin src=\"(.+)\"></script>").unwrap();
         static ref RE_CLIENT_ID: Regex = Regex::new("client_id:\"(.+?)\"").unwrap();
     }
 
-    let url = "https://a-v2.sndcdn.com/assets/app-f06013d-ccf988a-3.js";
+    // Find the last <script> on the main page.
+    let main_page_html = {
+        let url = "https://soundcloud.com/discover";
+        info!("querying GET {}", url);
+        let mut resp = client.get(url).send()?.error_for_status()?;
+        let mut buf = Vec::new();
+        resp.copy_to(&mut buf)?;
+        buf
+    };
+    let url = RE_SCRIPT_TAG
+        .captures_iter(&main_page_html)
+        .last()
+        .and_then(|c| c.get(1))
+        .and_then(|m| str::from_utf8(m.as_bytes()).ok())
+        .ok_or(Error::Login)?;
+
     info!("querying GET {}", url);
     let mut main_page_resp = client.get(url).send()?.error_for_status()?;
     let mut buf = Vec::new();
     main_page_resp.copy_to(&mut buf)?;
     RE_CLIENT_ID
-        .captures(&buf[..])
+        .captures(&buf)
         .and_then(|cap| cap.get(1))
         .map(|mat| String::from_utf8_lossy(mat.as_bytes()).to_string())
         .ok_or(Error::Login)
@@ -258,5 +275,15 @@ impl<T: DeserializeOwned + Send> Page<T> {
             .flat_map(|page| page.collection)
             .collect();
         Ok(all)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn anonymous_client() {
+        Client::anonymous().unwrap();
     }
 }
