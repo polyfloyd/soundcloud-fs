@@ -54,6 +54,14 @@ fn main() {
                 .default_value("0")
                 .possible_values(&["0", "1"])
                 .help("Enables image metadata in ID3 tags. This will incur an additional HTTP request everytime a file is opened for reading"),
+        ).arg(
+            clap::Arg::with_name("id3-parse-strings")
+                .long("id3-parse-strings")
+                .value_name("enable")
+                .takes_value(true)
+                .default_value("1")
+                .possible_values(&["0", "1"])
+                .help("Looks into common patterns in track metadata to attempt to determine more accurate ID3 metadata"),
         ).get_matches();
 
     let login = cli.value_of("login").and_then(|s| {
@@ -84,6 +92,7 @@ fn main() {
         sc_client,
         show: cli.values_of("user").unwrap().map(str::to_string).collect(),
         id3_download_images: cli.value_of("id3-images") == Some("1"),
+        id3_parse_strings: cli.value_of("id3-parse-strings") == Some("1"),
     };
 
     let uid = nix::unistd::Uid::current().as_raw() as u32;

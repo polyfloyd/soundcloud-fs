@@ -6,11 +6,18 @@ use std::io;
 pub fn tag_for_track(
     track: &soundcloud::Track,
     enable_artwork: bool,
+    parse_strings: bool,
 ) -> Result<impl io::Read + io::Seek, soundcloud::Error> {
     let mut tag = id3::Tag::new();
 
-    tag.set_artist(track.user.username.as_str());
-    tag.set_title(track.title.as_str());
+    if let Some(i) = track.title.find(" - ").filter(|_| parse_strings) {
+        tag.set_title(&track.title[..i]);
+        tag.set_artist(&track.title[i + 3..]);
+    } else {
+        tag.set_artist(track.user.username.as_str());
+        tag.set_title(track.title.as_str());
+    }
+
     tag.set_duration(track.duration_ms as u32);
     tag.set_text("TCOP", track.license.as_str());
     tag.add_frame(id3::Frame::with_content(

@@ -65,6 +65,7 @@ pub struct RootState {
     pub sc_client: soundcloud::Client,
     pub show: Vec<String>,
     pub id3_download_images: bool,
+    pub id3_parse_strings: bool,
 }
 
 #[derive(Clone)]
@@ -333,7 +334,11 @@ impl<'a> filesystem::File for TrackAudio<'a> {
     type Reader = Concat<Box<ReadSeek + 'a>>;
 
     fn open_ro(&self) -> Result<Self::Reader, Self::Error> {
-        let id3_tag = tag_for_track(&self.track, self.inner.id3_download_images)?;
+        let id3_tag = tag_for_track(
+            &self.track,
+            self.inner.id3_download_images,
+            self.inner.id3_parse_strings,
+        )?;
 
         let remote_mp3_size = self.track.audio_size() as u64;
         let padding_len = mp3::ZERO_FRAME.len() as u64;
@@ -376,7 +381,11 @@ impl<'a> filesystem::File for TrackAudio<'a> {
 
     fn size(&self) -> Result<u64, Self::Error> {
         let id3_tag_size = {
-            let mut b = tag_for_track(&self.track, self.inner.id3_download_images)?;
+            let mut b = tag_for_track(
+                &self.track,
+                self.inner.id3_download_images,
+                self.inner.id3_parse_strings,
+            )?;
             b.seek(io::SeekFrom::End(0)).unwrap()
         };
         let mp3_size = {
