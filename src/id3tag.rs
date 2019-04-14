@@ -33,6 +33,21 @@ pub fn tag_for_track(
             .release_year
             .unwrap_or_else(|| track.created_at.date().year()),
     );
+    tag.set_text(
+        "TDAT",
+        format!(
+            "{:02}{:02}",
+            track.created_at.date().day(),
+            track.created_at.date().month(),
+        ),
+    );
+    if let Some(ref descrtiption) = track.description {
+        tag.add_comment(id3::frame::Comment {
+            lang: "eng".to_string(),
+            description: "Description".to_string(),
+            text: descrtiption.clone(),
+        });
+    }
     if let Some(year) = track.release_year {
         tag.set_text("TORY", format!("{}", year));
     }
