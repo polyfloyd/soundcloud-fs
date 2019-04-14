@@ -22,7 +22,7 @@ pub use self::error::Error;
 pub use self::track::Track;
 pub use self::user::User;
 
-const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64; rv:65.0) Gecko/20100101 Firefox/65.0";
+const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64; rv:66.0) Gecko/20100101 Firefox/66.0";
 const PAGE_MAX_SIZE: u64 = 200;
 
 pub(crate) fn default_headers() -> header::HeaderMap {
