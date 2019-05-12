@@ -47,6 +47,14 @@ fn main() {
                     c => Err(format!("bad credential format, split on : yields {} strings", c)),
                 }).help("Logs in using a username and password instead of accessing the API anonymously"),
         ).arg(
+            clap::Arg::with_name("mpeg-padding")
+                .long("mpeg-padding")
+                .value_name("enable")
+                .takes_value(true)
+                .default_value("1")
+                .possible_values(&["0", "1"])
+                .help("Enables rewriting parts of the MPEG stream to speed up indexing of media libraries"),
+        ).arg(
             clap::Arg::with_name("id3-images")
                 .long("id3-images")
                 .value_name("enable")
@@ -91,6 +99,7 @@ fn main() {
     let root = RootState {
         sc_client,
         show: cli.values_of("user").unwrap().map(str::to_string).collect(),
+        mpeg_padding: cli.value_of("mpeg-padding") == Some("1"),
         id3_download_images: cli.value_of("id3-images") == Some("1"),
         id3_parse_strings: cli.value_of("id3-parse-strings") == Some("1"),
     };

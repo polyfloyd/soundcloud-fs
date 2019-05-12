@@ -64,6 +64,7 @@ impl From<id3::Error> for Error {
 pub struct RootState {
     pub sc_client: soundcloud::Client,
     pub show: Vec<String>,
+    pub mpeg_padding: bool,
     pub id3_download_images: bool,
     pub id3_parse_strings: bool,
 }
@@ -369,13 +370,20 @@ impl<'a> filesystem::File for TrackAudio<'a> {
             Ok(Skip::new(f, first_frame_size))
         });
 
-        let concat = Concat::new(vec![
-            Box::<ReadSeek>::from(Box::new(id3_tag)),
-            Box::<ReadSeek>::from(Box::new(io::Cursor::new(mp3_header))),
-            Box::<ReadSeek>::from(Box::new(padding_start)),
-            Box::<ReadSeek>::from(Box::new(audio)),
-            Box::<ReadSeek>::from(Box::new(padding_end)),
-        ]);
+        let concat = if self.inner.mpeg_padding {
+            Concat::new(vec![
+                Box::<ReadSeek>::from(Box::new(id3_tag)),
+                Box::<ReadSeek>::from(Box::new(io::Cursor::new(mp3_header))),
+                Box::<ReadSeek>::from(Box::new(padding_start)),
+                Box::<ReadSeek>::from(Box::new(audio)),
+                Box::<ReadSeek>::from(Box::new(padding_end)),
+            ])
+        } else {
+            Concat::new(vec![
+                Box::<ReadSeek>::from(Box::new(id3_tag)),
+                Box::<ReadSeek>::from(Box::new(audio)),
+            ])
+        };
         Ok(concat)
     }
 
@@ -388,11 +396,13 @@ impl<'a> filesystem::File for TrackAudio<'a> {
             )?;
             b.seek(io::SeekFrom::End(0)).unwrap()
         };
-        let mp3_size = {
+        let padding_size = if self.inner.mpeg_padding {
             let padding_len = mp3::ZERO_FRAME.len() as u64;
-            self.track.audio_size() as u64 + PADDING_START * padding_len + PADDING_END * padding_len
+            PADDING_START * padding_len + PADDING_END * padding_len
+        } else {
+            0
         };
-        Ok(id3_tag_size + mp3_size)
+        Ok(id3_tag_size + padding_size + self.track.audio_size() as u64)
     }
 }
 
