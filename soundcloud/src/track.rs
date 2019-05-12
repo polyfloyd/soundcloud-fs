@@ -85,7 +85,7 @@ impl Track {
         if self.download_url.is_none() {
             return "mp3";
         }
-        match self.original_format.as_ref().map(|s| s.as_str()) {
+        match self.original_format.as_ref().map(String::as_str) {
             Some("raw") => "mp3",
             Some(s) => s,
             None => "mp3",
@@ -136,7 +136,7 @@ impl Track {
             .headers()
             .get(header::CONTENT_TYPE)
             .and_then(|h| h.to_str().ok())
-            .map(|h| h.to_string())
+            .map(ToString::to_string)
             .unwrap_or_else(|| "image/jpg".to_string());
         let mut data = Vec::new();
         resp.copy_to(&mut data)?;
