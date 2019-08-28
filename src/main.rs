@@ -2,12 +2,15 @@
 
 #[macro_use]
 extern crate failure_derive;
+#[macro_use]
+extern crate serde_derive;
 
 mod filesystem;
 mod id3tag;
 mod ioutil;
 mod mapping;
 mod mp3;
+mod soundcloud;
 
 use self::filesystem::*;
 use self::mapping::*;

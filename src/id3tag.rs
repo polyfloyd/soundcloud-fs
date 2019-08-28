@@ -1,3 +1,4 @@
+use crate::soundcloud;
 use chrono::Datelike;
 use id3;
 use log::*;

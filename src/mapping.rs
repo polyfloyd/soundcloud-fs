@@ -2,9 +2,9 @@ use crate::filesystem;
 use crate::id3tag::tag_for_track;
 use crate::ioutil::{Concat, LazyOpen, ReadSeek, Skip};
 use crate::mp3;
+use crate::soundcloud;
 use chrono::Utc;
 use id3;
-use soundcloud;
 use std::io::{self, Seek};
 use std::path::PathBuf;
 

@@ -7,17 +7,8 @@ pub enum Error {
     #[fail(display = "login failed")]
     Login,
 
-    #[fail(display = "client has no token")]
-    NoToken,
-
     #[fail(display = "artwork not available")]
     ArtworkNotAvailable,
-
-    #[fail(display = "downlaod not available")]
-    DownloadNotAvailable,
-
-    #[fail(display = "could not load client form cache: {}", _0)]
-    FromCache(Box<dyn error::Error + Send + Sync>),
 
     #[fail(display = "IO error: {}", _0)]
     IOError(io::Error),

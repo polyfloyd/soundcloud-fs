@@ -67,10 +67,6 @@ impl User {
         )
     }
 
-    pub fn me(client: &Client) -> Result<User, Error> {
-        client.query(Method::GET, "https://api.soundcloud.com/me")
-    }
-
     pub fn tracks(&self, client: &Client) -> Result<Vec<Track>, Error> {
         let url = format!("https://api.soundcloud.com/users/{}/tracks", self.id);
         Page::all_with_size_hint(client, url, self.track_count as u64)

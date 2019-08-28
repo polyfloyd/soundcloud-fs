@@ -1,5 +1,5 @@
-use crate::util::http;
-use crate::*;
+use crate::soundcloud::util::http;
+use crate::soundcloud::*;
 use chrono::{DateTime, Utc};
 use reqwest::{Method, Url};
 use serde::{Deserialize, Deserializer};
@@ -81,27 +81,6 @@ pub struct Track {
 }
 
 impl Track {
-    pub fn download_format(&self) -> &str {
-        if self.download_url.is_none() {
-            return "mp3";
-        }
-        match self.original_format.as_ref().map(String::as_str) {
-            Some("raw") => "mp3",
-            Some(s) => s,
-            None => "mp3",
-        }
-    }
-
-    pub fn download<'a>(&self, client: &'a Client) -> Result<impl io::Read + io::Seek + 'a, Error> {
-        if let Some(ref raw_url) = self.download_url {
-            let (req_builder, _) = client.request(Method::GET, Url::parse(raw_url)?)?;
-            let req = req_builder.build()?;
-            Ok(http::RangeSeeker::new(&client.client, req))
-        } else {
-            Err(Error::DownloadNotAvailable)
-        }
-    }
-
     pub fn audio<'a>(&self, client: &'a Client) -> Result<impl io::Read + io::Seek + 'a, Error> {
         let raw_url = format!("https://api.soundcloud.com/i1/tracks/{}/streams", self.id);
         let streams: StreamInfo = client.query(Method::GET, &raw_url)?;

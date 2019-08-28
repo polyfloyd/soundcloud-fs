@@ -2,12 +2,7 @@ mod date_format;
 mod error;
 mod track;
 mod user;
-pub(crate) mod util;
-
-#[macro_use]
-extern crate failure_derive;
-#[macro_use]
-extern crate serde_derive;
+mod util;
 
 use lazy_static::lazy_static;
 use log::*;
