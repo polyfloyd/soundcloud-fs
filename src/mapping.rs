@@ -332,7 +332,7 @@ impl filesystem::Meta for TrackAudio<'_> {
 }
 
 impl<'a> filesystem::File for TrackAudio<'a> {
-    type Reader = Concat<Box<ReadSeek + 'a>>;
+    type Reader = Concat<Box<dyn ReadSeek + 'a>>;
 
     fn open_ro(&self) -> Result<Self::Reader, Self::Error> {
         let id3_tag = tag_for_track(
@@ -372,16 +372,16 @@ impl<'a> filesystem::File for TrackAudio<'a> {
 
         let concat = if self.inner.mpeg_padding {
             Concat::new(vec![
-                Box::<ReadSeek>::from(Box::new(id3_tag)),
-                Box::<ReadSeek>::from(Box::new(io::Cursor::new(mp3_header))),
-                Box::<ReadSeek>::from(Box::new(padding_start)),
-                Box::<ReadSeek>::from(Box::new(audio)),
-                Box::<ReadSeek>::from(Box::new(padding_end)),
+                Box::<dyn ReadSeek>::from(Box::new(id3_tag)),
+                Box::<dyn ReadSeek>::from(Box::new(io::Cursor::new(mp3_header))),
+                Box::<dyn ReadSeek>::from(Box::new(padding_start)),
+                Box::<dyn ReadSeek>::from(Box::new(audio)),
+                Box::<dyn ReadSeek>::from(Box::new(padding_end)),
             ])
         } else {
             Concat::new(vec![
-                Box::<ReadSeek>::from(Box::new(id3_tag)),
-                Box::<ReadSeek>::from(Box::new(audio)),
+                Box::<dyn ReadSeek>::from(Box::new(id3_tag)),
+                Box::<dyn ReadSeek>::from(Box::new(audio)),
             ])
         };
         Ok(concat)

@@ -17,7 +17,7 @@ pub enum Error {
     DownloadNotAvailable,
 
     #[fail(display = "could not load client form cache: {}", _0)]
-    FromCache(Box<error::Error + Send + Sync>),
+    FromCache(Box<dyn error::Error + Send + Sync>),
 
     #[fail(display = "IO error: {}", _0)]
     IOError(io::Error),
@@ -34,7 +34,7 @@ pub enum Error {
         method: reqwest::Method,
         url: reqwest::Url,
         body: String,
-        error: Box<error::Error + Send + Sync>,
+        error: Box<dyn error::Error + Send + Sync>,
     },
 }
 
