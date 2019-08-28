@@ -3,6 +3,17 @@ name = "soundcloud-fs"
 version = "0.1.0"
 authors = ["polyfloyd <floyd@polyfloyd.net>"]
 edition = "2018"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/polyfloyd/soundcloud-fs"
+description = "FUSE driver for SoundCloud"
+keywords = ["soundcloud", "fuse"]
+include = [
+    "src/**/*.rs",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE",
+]
 
 [dependencies]
 chrono = "0.4"
