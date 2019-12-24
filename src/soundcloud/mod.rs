@@ -17,7 +17,7 @@ pub use self::error::Error;
 pub use self::track::Track;
 pub use self::user::User;
 
-const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64; rv:66.0) Gecko/20100101 Firefox/66.0";
+const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64; rv:71.0) Gecko/20100101 Firefox/71.0";
 const PAGE_MAX_SIZE: u64 = 200;
 
 pub(crate) fn default_headers() -> header::HeaderMap {
@@ -132,6 +132,16 @@ impl Client {
         let url = Url::parse_with_params(base_url.as_ref(), &[("client_id", &self.client_id)])?;
         let req = self.client.request(method, url.clone());
         Ok((req, url))
+    }
+
+    pub(crate) fn query_string(
+        &self,
+        method: reqwest::Method,
+        base_url: impl AsRef<str>,
+    ) -> Result<String, Error> {
+        let (req, url) = self.request(method.clone(), base_url)?;
+        info!("querying {} {}", method, url);
+        Ok(req.send()?.error_for_status()?.text()?)
     }
 
     pub(crate) fn query<T: DeserializeOwned>(

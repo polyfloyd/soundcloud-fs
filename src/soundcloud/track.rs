@@ -1,7 +1,7 @@
 use crate::soundcloud::util::http;
 use crate::soundcloud::*;
 use chrono::{DateTime, Utc};
-use reqwest::{Method, Url};
+use reqwest::Method;
 use serde::{Deserialize, Deserializer};
 use std::hash::{Hash, Hasher};
 use std::io;
@@ -81,12 +81,48 @@ pub struct Track {
 }
 
 impl Track {
+    #[cfg(test)]
+    pub fn by_id(client: &Client, id: i64) -> Result<Self, Error> {
+        let url = format!("https://api.soundcloud.com/tracks/{}", id);
+        client.query(Method::GET, url)
+    }
+
     pub fn audio<'a>(&self, client: &'a Client) -> Result<impl io::Read + io::Seek + 'a, Error> {
-        let raw_url = format!("https://api.soundcloud.com/i1/tracks/{}/streams", self.id);
-        let streams: StreamInfo = client.query(Method::GET, &raw_url)?;
-        let req = default_client()
-            .request(Method::GET, Url::parse(&streams.http_mp3_128_url)?)
-            .build()?;
+        lazy_static! {
+            static ref RE_HLS_URL: regex::Regex =
+                regex::Regex::new("https://[^\"]+?/stream/hls").unwrap();
+            static ref RE_MP3_URL: regex::Regex =
+                regex::Regex::new("^(.+/media)/(\\d+)/(\\d+)/(.+)$").unwrap();
+        }
+        // Query the track's HTML page, we need to find a URL ending with `/hls` to follow.
+        let html_page = client.query_string(Method::GET, &self.permalink_url)?;
+        let hls_url = RE_HLS_URL
+            .find(&html_page)
+            .map(|m| m.as_str())
+            .ok_or_else(|| Error::Generic("hls url not found on page".to_string()))?;
+        // Query the URL, the returned object contains another URL which points to a playlist file.
+        let hls_info: HLSInfo = client.query(Method::GET, hls_url)?;
+        // Get the playlist file.
+        let playlist_file = default_client()
+            .execute(default_client().get(&hls_info.url).build()?)?
+            .text()?;
+        // The playlist is in M3U format. Each entry in this playlist is a successive part of the
+        // full audio file.
+        let mp3_files: Vec<_> = playlist_file
+            .lines()
+            // Lines starting with `#` are metadata.
+            .filter(|line| !line.starts_with('#'))
+            .collect();
+        // Hack: Concatenate the files by rewriting the offsets. The offsets are the
+        // `/media/<start>/<end>` part of the URL.
+        let last_mp3 = mp3_files
+            .last()
+            .ok_or_else(|| Error::Generic("no files in track playlist".to_string()))?;
+        let cap = RE_MP3_URL
+            .captures(last_mp3)
+            .ok_or_else(|| Error::Generic("unexpected MP3 url format".to_string()))?;
+        let mp3_url = format!("{}/{}/{}/{}", &cap[1], 0, &cap[3], &cap[4]);
+        let req = default_client().get(&mp3_url).build()?;
         Ok(http::RangeSeeker::new(default_client(), req))
     }
 
@@ -129,12 +165,9 @@ impl Hash for Track {
     }
 }
 
-#[derive(Deserialize)]
-struct StreamInfo {
-    http_mp3_128_url: String,
-    //hls_mp3_128_url: String,
-    //hls_opus_64_url: String,
-    //preview_mp3_128_url: String,
+#[derive(Deserialize, Debug)]
+struct HLSInfo {
+    url: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -156,4 +189,24 @@ fn empty_str_as_none<'de, D: Deserializer<'de>>(d: D) -> Result<Option<String>, 
 fn null_as_false<'de, D: Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
     let o: Option<bool> = Option::deserialize(d)?;
     Ok(o.unwrap_or(false))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use io::Read;
+
+    #[test]
+    fn get_audio() {
+        // https://soundcloud.com/wright-and-bastard/the-fat-dandy-butterfly-slims
+        // CC BY-NC-SA 3.0
+        let id = 609233313;
+
+        let client = Client::anonymous().unwrap();
+        let track = Track::by_id(&client, id).unwrap();
+
+        let mut r = track.audio(&client).unwrap();
+        let mut b = [0; 4096];
+        r.read_exact(&mut b[..]).unwrap();
+    }
 }

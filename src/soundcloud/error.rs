@@ -27,6 +27,9 @@ pub enum Error {
         body: String,
         error: Box<dyn error::Error + Send + Sync>,
     },
+
+    #[fail(display = "{}", _0)]
+    Generic(String),
 }
 
 impl From<io::Error> for Error {
