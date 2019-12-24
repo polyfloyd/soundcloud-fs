@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+  schedule:
+    - cron:  '0 0 * * 1' # weekly
+
+jobs:
+
+  build:
+    strategy:
+      matrix:
+        toolchain: [stable, nightly]
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+
+    - name: Install dependencies
+      run: sudo apt install libfuse-dev
+
+    - name: Select channel
+      run: rustup default ${{ matrix.toolchain }}
+
+    - name: Update toolchain
+      run: rustup update
+
+    - name: Build
+      run: cargo build
+
+    - name: Test
+      run: cargo test
+
+  style:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+
+    - name: Install dependencies
+      run: sudo apt install libfuse-dev
+
+    - name: Rustfmt
+      run: cargo fmt -- --check
+
+    - name: Clippy
+      run: cargo clippy

@@ -1,6 +1,8 @@
 SoundCloud FS
 =============
 
+[![Build Status](https://github.com/polyfloyd/soundcloud-fs/workflows/CI/badge.svg)](https://github.com/polyfloyd/soundcloud-fs/actions)
+
 This project implements a FUSE driver to serve audio files from SoundCloud. It
 is optimized to avoid needless API requests and aid mass indexing by music
 libraries, specifically MPD.
