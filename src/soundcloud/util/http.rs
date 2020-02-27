@@ -4,6 +4,30 @@ use reqwest::header::{self, HeaderValue};
 use reqwest::StatusCode;
 use std::io;
 use std::mem;
+use std::thread;
+use std::time::Duration;
+
+pub fn retry_execute(client: &Client, request: Request) -> reqwest::Result<Response> {
+    let mut err = None;
+    for attempt in 0..5 {
+        if let Some(err) = &err {
+            warn!("query {}: {:?}, retrying", request.url(), err);
+        }
+
+        let req = request
+            .try_clone()
+            .expect("retry_execute requires a clone-able request");
+        err = match client.execute(req) {
+            Ok(res) if res.status().is_server_error() => {
+                thread::sleep(Duration::from_millis(100) * (1 << attempt));
+                Some(res.error_for_status().unwrap_err())
+            }
+            Ok(res) => return Ok(res),
+            Err(err) => Some(err),
+        };
+    }
+    Err(err.expect("retry loop should run at least once"))
+}
 
 enum State {
     NoResponse,
@@ -26,6 +50,8 @@ pub struct RangeSeeker<'a> {
 
 impl<'a> RangeSeeker<'a> {
     pub fn new(client: &'a Client, req: Request) -> Self {
+        req.try_clone()
+            .expect("RangeSeeker requires a clone-able request");
         RangeSeeker {
             client,
             req,
@@ -38,7 +64,7 @@ impl<'a> RangeSeeker<'a> {
     }
 
     fn next_resp(&mut self) -> io::Result<()> {
-        let mut req = Request::new(self.req.method().clone(), self.req.url().clone());
+        let mut req = self.req.try_clone().unwrap();
         req.headers_mut().insert(
             header::RANGE,
             HeaderValue::from_str(&format!("bytes={}-", self.current_offset))
@@ -52,9 +78,7 @@ impl<'a> RangeSeeker<'a> {
             self.current_offset
         );
         self.num_requests += 1;
-        let res = self
-            .client
-            .execute(req)
+        let res = retry_execute(self.client, req)
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
 
         if res.status() == StatusCode::RANGE_NOT_SATISFIABLE {

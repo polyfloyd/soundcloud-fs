@@ -103,9 +103,11 @@ impl Track {
         // Query the URL, the returned object contains another URL which points to a playlist file.
         let hls_info: HLSInfo = client.query(Method::GET, hls_url)?;
         // Get the playlist file.
-        let playlist_file = default_client()
-            .execute(default_client().get(&hls_info.url).build()?)?
-            .text()?;
+        let playlist_file = retry_execute(
+            default_client(),
+            default_client().get(&hls_info.url).build()?,
+        )?
+        .text()?;
         // The playlist is in M3U format. Each entry in this playlist is a successive part of the
         // full audio file.
         let mp3_files: Vec<_> = playlist_file
@@ -145,7 +147,8 @@ impl Track {
         };
 
         info!("querying GET {}", url);
-        let mut resp = default_client().get(&url).send()?.error_for_status()?;
+        let mut resp = retry_execute(default_client(), default_client().get(&url).build()?)?
+            .error_for_status()?;
 
         let mime_type = resp
             .headers()

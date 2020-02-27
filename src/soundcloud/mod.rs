@@ -4,6 +4,7 @@ mod track;
 mod user;
 mod util;
 
+use self::util::http::retry_execute;
 use lazy_static::lazy_static;
 use log::*;
 use rayon::prelude::*;
@@ -85,12 +86,12 @@ impl Client {
                 &[("client_id", &client_id)],
             ).unwrap();
             trace!("password login URL: {}", login_url);
-            let login_res_body: PasswordLoginResBody = client
-                .post(login_url)
-                .json(&login_req_body)
-                .send()?
-                .error_for_status()?
-                .json()?;
+            let login_res_body: PasswordLoginResBody = retry_execute(
+                client,
+                client.post(login_url).json(&login_req_body).build()?,
+            )?
+            .error_for_status()?
+            .json()?;
             login_res_body.session.access_token
         };
 
@@ -143,7 +144,10 @@ impl Client {
     ) -> Result<String, Error> {
         let (req, url) = self.request(method.clone(), base_url)?;
         info!("querying {} {}", method, url);
-        Ok(req.send()?.error_for_status()?.text()?)
+        let s = retry_execute(&self.client, req.build()?)?
+            .error_for_status()?
+            .text()?;
+        Ok(s)
     }
 
     pub(crate) fn query<T: DeserializeOwned>(
@@ -154,7 +158,9 @@ impl Client {
         let (req, url) = self.request(method.clone(), base_url)?;
         info!("querying {} {}", method, url);
         let mut buf = Vec::new();
-        req.send()?.error_for_status()?.copy_to(&mut buf)?;
+        retry_execute(&self.client, req.build()?)?
+            .error_for_status()?
+            .copy_to(&mut buf)?;
 
         match serde_json::from_slice(&buf[..]) {
             Ok(t) => Ok(t),
@@ -196,7 +202,7 @@ fn anonymous_client_id(client: &blocking::Client) -> Result<String, Error> {
     let main_page_html = {
         let url = "https://soundcloud.com/discover";
         info!("querying GET {}", url);
-        let mut resp = client.get(url).send()?.error_for_status()?;
+        let mut resp = retry_execute(client, client.get(url).build()?)?.error_for_status()?;
         let mut buf = Vec::new();
         resp.copy_to(&mut buf)?;
         buf
@@ -209,7 +215,7 @@ fn anonymous_client_id(client: &blocking::Client) -> Result<String, Error> {
         .ok_or(Error::Login)?;
 
     info!("querying GET {}", url);
-    let mut main_page_resp = client.get(url).send()?.error_for_status()?;
+    let mut main_page_resp = retry_execute(client, client.get(url).build()?)?.error_for_status()?;
     let mut buf = Vec::new();
     main_page_resp.copy_to(&mut buf)?;
     RE_CLIENT_ID
