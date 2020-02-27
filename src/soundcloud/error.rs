@@ -12,7 +12,7 @@ pub enum Error {
 
     ReqwestError(reqwest::Error),
     ReqwestInvalidHeader(reqwest::header::InvalidHeaderValue),
-    ReqwestUrlError(reqwest::UrlError),
+    ReqwestUrlParseError(url::ParseError),
 
     MalformedResponse {
         method: reqwest::Method,
@@ -50,8 +50,8 @@ impl From<reqwest::header::InvalidHeaderValue> for Error {
     }
 }
 
-impl From<reqwest::UrlError> for Error {
-    fn from(err: reqwest::UrlError) -> Self {
-        Self::ReqwestUrlError(err)
+impl From<url::ParseError> for Error {
+    fn from(err: url::ParseError) -> Self {
+        Self::ReqwestUrlParseError(err)
     }
 }

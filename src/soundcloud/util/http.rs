@@ -1,4 +1,5 @@
 use log::*;
+use reqwest::blocking::{Client, Request, Response};
 use reqwest::header::{self, HeaderValue};
 use reqwest::StatusCode;
 use std::io;
@@ -6,13 +7,13 @@ use std::mem;
 
 enum State {
     NoResponse,
-    Response(Box<reqwest::Response>),
+    Response(Box<Response>),
     OutOfRange,
 }
 
 pub struct RangeSeeker<'a> {
-    client: &'a reqwest::Client,
-    req: reqwest::Request,
+    client: &'a Client,
+    req: Request,
     num_requests: u64,
 
     state: State,
@@ -20,11 +21,11 @@ pub struct RangeSeeker<'a> {
     content_length: Option<u64>,
 
     // The previous request scheme is used as an optimization for file size probes.
-    response_cache: Option<(Box<reqwest::Response>, u64)>,
+    response_cache: Option<(Box<Response>, u64)>,
 }
 
 impl<'a> RangeSeeker<'a> {
-    pub fn new(client: &'a reqwest::Client, req: reqwest::Request) -> Self {
+    pub fn new(client: &'a Client, req: Request) -> Self {
         RangeSeeker {
             client,
             req,
@@ -37,7 +38,7 @@ impl<'a> RangeSeeker<'a> {
     }
 
     fn next_resp(&mut self) -> io::Result<()> {
-        let mut req = reqwest::Request::new(self.req.method().clone(), self.req.url().clone());
+        let mut req = Request::new(self.req.method().clone(), self.req.url().clone());
         req.headers_mut().insert(
             header::RANGE,
             HeaderValue::from_str(&format!("bytes={}-", self.current_offset))
@@ -173,7 +174,7 @@ impl<'a> io::Seek for RangeSeeker<'a> {
     }
 }
 
-fn content_length(res: &reqwest::Response) -> Option<u64> {
+fn content_length(res: &Response) -> Option<u64> {
     res.headers()
         .get(header::CONTENT_LENGTH)
         .and_then(|ct_len| ct_len.to_str().ok())
@@ -195,9 +196,9 @@ mod tests {
     use super::*;
     use std::io::{Read, Seek};
 
-    fn test_request(size: usize) -> reqwest::Request {
+    fn test_request(size: usize) -> Request {
         // Ideally, we are not dependant on an external server for unit tests...
-        let mut req = reqwest::Request::new(
+        let mut req = Request::new(
             reqwest::Method::GET,
             format!("https://httpbin.org/range/{}", size)
                 .parse()
@@ -222,7 +223,7 @@ mod tests {
     #[test]
     fn test_read_all() {
         const SIZE: usize = 8192;
-        let client = reqwest::Client::new();
+        let client = Client::new();
         let req = test_request(SIZE);
 
         let mut f = RangeSeeker::new(&client, req);
@@ -237,7 +238,7 @@ mod tests {
     #[test]
     fn test_read_partial() {
         const SIZE: usize = 8192;
-        let client = reqwest::Client::new();
+        let client = Client::new();
         let req = test_request(SIZE);
 
         let mut f = RangeSeeker::new(&client, req);
@@ -255,7 +256,7 @@ mod tests {
     #[test]
     fn test_seek_to_end() {
         const SIZE: usize = 8192;
-        let client = reqwest::Client::new();
+        let client = Client::new();
         let req = test_request(SIZE);
 
         let mut f = RangeSeeker::new(&client, req);
@@ -273,7 +274,7 @@ mod tests {
     #[test]
     fn test_probe_size() {
         const SIZE: usize = 8192;
-        let client = reqwest::Client::new();
+        let client = Client::new();
         let req = test_request(SIZE);
 
         let mut f = RangeSeeker::new(&client, req);
@@ -294,7 +295,7 @@ mod tests {
     #[test]
     fn test_read_after_seek() {
         const SIZE: usize = 8192;
-        let client = reqwest::Client::new();
+        let client = Client::new();
         let req = test_request(SIZE);
 
         let mut f = RangeSeeker::new(&client, req);

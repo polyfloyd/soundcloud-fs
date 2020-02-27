@@ -8,10 +8,12 @@ use lazy_static::lazy_static;
 use log::*;
 use rayon::prelude::*;
 use regex::bytes::Regex;
+use reqwest::blocking::{self, RequestBuilder};
 use reqwest::{header, Method, Url};
 use serde::de::DeserializeOwned;
 use std::fmt;
 use std::str;
+use url;
 
 pub use self::error::Error;
 pub use self::track::Track;
@@ -37,9 +39,9 @@ pub(crate) fn default_headers() -> header::HeaderMap {
     headers
 }
 
-pub(crate) fn default_client() -> &'static reqwest::Client {
+pub(crate) fn default_client() -> &'static blocking::Client {
     lazy_static! {
-        static ref DEFAULT_CLIENT: reqwest::Client = reqwest::Client::builder()
+        static ref DEFAULT_CLIENT: blocking::Client = blocking::Client::builder()
             .default_headers(default_headers())
             .build()
             .unwrap();
@@ -49,7 +51,7 @@ pub(crate) fn default_client() -> &'static reqwest::Client {
 
 #[derive(Clone)]
 pub struct Client {
-    client: reqwest::Client,
+    client: blocking::Client,
     client_id: String,
     token: Option<String>,
 }
@@ -109,7 +111,7 @@ impl Client {
 
     fn from_token(client_id: impl Into<String>, token: impl Into<String>) -> Result<Client, Error> {
         let token = token.into();
-        let auth_client = reqwest::Client::builder()
+        let auth_client = blocking::Client::builder()
             .default_headers({
                 let auth_header = format!("OAuth {}", token).parse()?;
                 let mut headers = default_headers();
@@ -128,7 +130,7 @@ impl Client {
         &self,
         method: reqwest::Method,
         base_url: impl AsRef<str>,
-    ) -> Result<(reqwest::RequestBuilder, Url), Error> {
+    ) -> Result<(RequestBuilder, Url), Error> {
         let url = Url::parse_with_params(base_url.as_ref(), &[("client_id", &self.client_id)])?;
         let req = self.client.request(method, url.clone());
         Ok((req, url))
@@ -183,7 +185,7 @@ impl fmt::Debug for Client {
     }
 }
 
-fn anonymous_client_id(client: &reqwest::Client) -> Result<String, Error> {
+fn anonymous_client_id(client: &blocking::Client) -> Result<String, Error> {
     lazy_static! {
         static ref RE_SCRIPT_TAG: Regex =
             Regex::new("<script crossorigin src=\"(.+)\"></script>").unwrap();
@@ -257,7 +259,7 @@ impl<T: DeserializeOwned + Send> Page<T> {
         base_url: impl AsRef<str>,
         count_hint: u64,
     ) -> Result<Vec<T>, Error> {
-        let urls: Result<Vec<Url>, _> = (0..=count_hint / PAGE_MAX_SIZE)
+        let urls: Result<Vec<Url>, url::ParseError> = (0..=count_hint / PAGE_MAX_SIZE)
             .map(|num| -> Result<_, _> {
                 Url::parse_with_params(
                     base_url.as_ref(),
