@@ -1,8 +1,6 @@
 #![allow(clippy::type_complexity)]
 
 #[macro_use]
-extern crate failure_derive;
-#[macro_use]
 extern crate serde_derive;
 
 mod filesystem;

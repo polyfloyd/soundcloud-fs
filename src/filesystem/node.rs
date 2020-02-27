@@ -1,10 +1,10 @@
 use super::*;
 use chrono::{DateTime, Utc};
-use failure::Fail;
+use std::error;
 use std::iter::Iterator;
 use std::path::PathBuf;
 
-pub trait Error: Fail {
+pub trait Error: error::Error {
     fn not_found() -> Self;
     fn errno(&self) -> i32;
 }

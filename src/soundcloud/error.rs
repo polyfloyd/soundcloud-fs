@@ -1,26 +1,19 @@
 use reqwest;
 use std::error;
+use std::fmt;
 use std::io;
 
-#[derive(Debug, Fail)]
+#[derive(Debug)]
 pub enum Error {
-    #[fail(display = "login failed")]
     Login,
-
-    #[fail(display = "artwork not available")]
     ArtworkNotAvailable,
 
-    #[fail(display = "IO error: {}", _0)]
     IOError(io::Error),
 
-    #[fail(display = "Reqwest error: {}", _0)]
     ReqwestError(reqwest::Error),
-    #[fail(display = "Reqwest invalid header value: {}", _0)]
     ReqwestInvalidHeader(reqwest::header::InvalidHeaderValue),
-    #[fail(display = "Reqwest URL parse error: {}", _0)]
     ReqwestUrlError(reqwest::UrlError),
 
-    #[fail(display = "Malformed response for {} {}: {}", method, url, error)]
     MalformedResponse {
         method: reqwest::Method,
         url: reqwest::Url,
@@ -28,30 +21,37 @@ pub enum Error {
         error: Box<dyn error::Error + Send + Sync>,
     },
 
-    #[fail(display = "{}", _0)]
     Generic(String),
 }
 
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl error::Error for Error {}
+
 impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Error {
-        Error::IOError(err)
+    fn from(err: io::Error) -> Self {
+        Self::IOError(err)
     }
 }
 
 impl From<reqwest::Error> for Error {
-    fn from(err: reqwest::Error) -> Error {
-        Error::ReqwestError(err)
+    fn from(err: reqwest::Error) -> Self {
+        Self::ReqwestError(err)
     }
 }
 
 impl From<reqwest::header::InvalidHeaderValue> for Error {
-    fn from(err: reqwest::header::InvalidHeaderValue) -> Error {
-        Error::ReqwestInvalidHeader(err)
+    fn from(err: reqwest::header::InvalidHeaderValue) -> Self {
+        Self::ReqwestInvalidHeader(err)
     }
 }
 
 impl From<reqwest::UrlError> for Error {
-    fn from(err: reqwest::UrlError) -> Error {
-        Error::ReqwestUrlError(err)
+    fn from(err: reqwest::UrlError) -> Self {
+        Self::ReqwestUrlError(err)
     }
 }

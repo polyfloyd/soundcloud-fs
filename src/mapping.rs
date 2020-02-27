@@ -5,24 +5,20 @@ use crate::mp3;
 use crate::soundcloud;
 use chrono::Utc;
 use id3;
+use std::error;
+use std::fmt;
 use std::io::{self, Seek};
 use std::path::PathBuf;
 
 const PADDING_START: u64 = 500;
 const PADDING_END: u64 = 20;
 
-#[derive(Debug, Fail)]
+#[derive(Debug)]
 pub enum Error {
-    #[fail(display = "child not found")]
     ChildNotFound,
 
-    #[fail(display = "soundcloud error: {}", _0)]
     SoundCloudError(soundcloud::Error),
-
-    #[fail(display = "io error: {}", _0)]
     IOError(io::Error),
-
-    #[fail(display = "id3 error: {}", _0)]
     ID3Error(id3::Error),
 }
 
@@ -40,6 +36,14 @@ impl filesystem::Error for Error {
         }
     }
 }
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl error::Error for Error {}
 
 impl From<soundcloud::Error> for Error {
     fn from(err: soundcloud::Error) -> Error {
