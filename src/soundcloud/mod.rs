@@ -1,5 +1,5 @@
-mod date_format;
 mod error;
+mod format;
 mod track;
 mod user;
 mod util;
@@ -218,7 +218,7 @@ fn anonymous_client_id(client: &reqwest::Client) -> Result<String, Error> {
 }
 
 // Objects used for password login.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 struct PasswordLoginReqBody<'a> {
     client_id: &'a str,
     scope: &'a str,
@@ -230,18 +230,18 @@ struct PasswordLoginReqBody<'a> {
     user_agent: &'a str,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 struct Credentials<'a> {
     identifier: &'a str,
     password: &'a str,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize)]
 struct PasswordLoginResBody {
     session: Session,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize)]
 struct Session {
     access_token: String,
 }

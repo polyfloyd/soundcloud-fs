@@ -1,10 +1,9 @@
-use super::*;
-use super::{Client, Error};
+use super::{format, Client, Error, Page, Track};
 use chrono::{DateTime, Utc};
 use reqwest::Method;
 use std::hash::{Hash, Hasher};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct User {
     /// Integer ID
     pub id: i64,
@@ -13,7 +12,7 @@ pub struct User {
     /// Username, e.g. "Doctor Wilson"
     pub username: String,
     /// Last modified timestamp, e.g. "2017/09/24 09:15:49 +0000"
-    #[serde(with = "date_format")]
+    #[serde(with = "format::date")]
     pub last_modified: DateTime<Utc>,
     /// API resource URL, e.g. "http://api.soundcloud.com/comments/32562"
     pub uri: String,
