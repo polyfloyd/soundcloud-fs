@@ -267,6 +267,22 @@ pub struct UserProfile<'a> {
     recurse: bool,
 }
 
+impl<'a> UserProfile<'a> {
+    fn favorites(&self) -> filesystem::Node<Root<'a>> {
+        filesystem::Node::Directory(Dir::UserFavorites(UserFavorites {
+            user: self.user.clone(),
+            inner: self.inner,
+        }))
+    }
+
+    fn following(&self) -> filesystem::Node<Root<'a>> {
+        filesystem::Node::Directory(Dir::UserFollowing(UserFollowing {
+            inner: self.inner,
+            user: self.user.clone(),
+        }))
+    }
+}
+
 impl filesystem::Meta for UserProfile<'_> {
     type Error = Error;
     fn metadata(&self) -> Result<filesystem::Metadata, Self::Error> {
@@ -282,20 +298,8 @@ impl<'a> filesystem::Directory<Root<'a>> for UserProfile<'a> {
     fn files(&self) -> Result<Vec<(String, filesystem::Node<Root<'a>>)>, Self::Error> {
         let mut files = Vec::new();
         if self.recurse {
-            files.push((
-                "favorites".to_string(),
-                filesystem::Node::Directory(Dir::UserFavorites(UserFavorites {
-                    user: self.user.clone(),
-                    inner: self.inner,
-                })),
-            ));
-            files.push((
-                "following".to_string(),
-                filesystem::Node::Directory(Dir::UserFollowing(UserFollowing {
-                    inner: self.inner,
-                    user: self.user.clone(),
-                })),
-            ));
+            files.push(("favorites".to_string(), self.favorites()));
+            files.push(("following".to_string(), self.following()));
         }
         let tracks = self
             .user
@@ -312,6 +316,22 @@ impl<'a> filesystem::Directory<Root<'a>> for UserProfile<'a> {
             });
         files.extend(tracks);
         Ok(files)
+    }
+
+    fn file_by_name(&self, name: &str) -> Result<filesystem::Node<Root<'a>>, Self::Error> {
+        match name {
+            "favorites" => return Ok(self.favorites()),
+            "following" => return Ok(self.following()),
+            _ => (),
+        }
+
+        let track_pl = name.trim_end_matches(".mp3");
+        let track =
+            soundcloud::Track::by_permalink(&self.inner.sc_client, &self.user.permalink, track_pl)?;
+        Ok(filesystem::Node::File(TrackAudio {
+            inner: self.inner,
+            track,
+        }))
     }
 }
 

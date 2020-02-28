@@ -87,6 +87,14 @@ impl Track {
         client.query(Method::GET, url)
     }
 
+    pub fn by_permalink(client: &Client, user_pl: &str, track_pl: &str) -> Result<Self, Error> {
+        let url = format!(
+            "https://api.soundcloud.com/users/{}/tracks/{}",
+            user_pl, track_pl,
+        );
+        client.query(Method::GET, url)
+    }
+
     pub fn audio<'a>(&self, client: &'a Client) -> Result<impl io::Read + io::Seek + 'a, Error> {
         lazy_static! {
             static ref RE_HLS_URL: regex::Regex =
