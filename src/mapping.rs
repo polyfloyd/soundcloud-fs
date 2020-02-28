@@ -130,6 +130,9 @@ impl<'a> filesystem::Directory<Root<'a>> for Dir<'a> {
     }
 
     fn file_by_name(&self, name: &str) -> Result<filesystem::Node<Root<'a>>, Self::Error> {
+        if !is_valid_file(name) {
+            return Err(Error::ChildNotFound);
+        }
         match self {
             Dir::UserList(f) => f.file_by_name(name),
             Dir::UserProfile(f) => f.file_by_name(name),
@@ -173,14 +176,8 @@ impl<'a> filesystem::Directory<Root<'a>> for UserList<'a> {
     }
 
     fn file_by_name(&self, name: &str) -> Result<filesystem::Node<Root<'a>>, Self::Error> {
-        match name {
-            "autorun.inf" | "BDMV" => {
-                return Err(Error::ChildNotFound);
-            }
-            name if name.starts_with('.') => {
-                return Err(Error::ChildNotFound);
-            }
-            _ => (),
+        if name.contains('.') {
+            return Err(Error::ChildNotFound);
         }
         let entry = filesystem::Node::Directory(Dir::UserProfile(UserProfile {
             inner: &self.inner,
@@ -429,5 +426,13 @@ impl filesystem::Meta for UserReference {
 impl filesystem::Symlink for UserReference {
     fn read_link(&self) -> Result<PathBuf, Self::Error> {
         Ok(["..", "..", &self.user.permalink].iter().collect())
+    }
+}
+
+fn is_valid_file(name: impl AsRef<str>) -> bool {
+    match name.as_ref() {
+        "AACS" | "BACKUP" | "PLAYLIST" | "BDMV" | "bdmv" => false,
+        name if name.starts_with('.') => false,
+        _ => true,
     }
 }
