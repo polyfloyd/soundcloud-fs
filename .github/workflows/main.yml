@@ -2,8 +2,8 @@ name: CI
 
 on:
   push:
-  schedule:
-    - cron:  '0 0 * * 1' # weekly
+#  schedule:
+#    - cron:  '0 0 * * 1' # weekly
 
 jobs:
 
