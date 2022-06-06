@@ -24,7 +24,7 @@ id3 = "0.5"
 lazy_static = "1"
 libc = "0.2"
 log = "0.4"
-nix = "0.16"
+nix = "0.20"
 rayon = "1"
 regex = "1"
 reqwest = { version = "0.10", features = [ "blocking", "json" ] }
