@@ -1,6 +1,8 @@
 SoundCloud FS
 =============
 
+This project is broken and no longer maintained.
+
 [![Build Status](https://github.com/polyfloyd/soundcloud-fs/workflows/CI/badge.svg)](https://github.com/polyfloyd/soundcloud-fs/actions)
 
 This project implements a FUSE driver to serve audio files from SoundCloud. It
